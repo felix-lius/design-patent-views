@@ -1,0 +1,63 @@
+# ---------------- Python ----------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ---------------- 构建产物 ----------------
+build/
+dist/
+*.spec.bak
+
+# ---------------- 本地依赖缓存 ----------------
+.wheels/
+.cache/
+.piptmp/
+
+# ---------------- 运行时产物 ----------------
+output/
+logs/
+input/*.json.tmp
+
+# ---------------- 测试模型 ----------------
+# 仓库只保留 3 个小示例：powerbank / sample_product / spacemouse
+# 其余留在本地做测试，不进仓库（需要时自行准备）
+examples/baffle.step
+examples/gamepad_joystick.step
+examples/mouse_moudabella.step
+examples/mouse_shell.step
+examples/spacemouse_shell.step
+examples/speaker_l.step
+examples/speaker_r.step
+examples/thinwall_case.step
+
+# ---------------- 内部文档（含商业策略，不公开）----------------
+开发路线图.md
+待议事项.md
+
+# ---------------- 编辑器 / 系统 ----------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ---------------- 临时文件 ----------------
+_preview.html
+*_预览.png
+*.tmp
+~$*
+
+# ---------------- 测试配置 ----------------
+# 只保留与 examples/ 里 3 个示例对应的配置
+input/gamepad_joystick.json
+input/mouse_moudabella.json
+input/mouse_shell.json
+input/spacemouse_shell.json
+input/speaker_l.json
+input/thinwall_case.json

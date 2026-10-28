@@ -1,0 +1,34 @@
+{
+  "product_name": "智能控制器（示例）",
+  "purpose": "用于工业设备的参数设置与运行状态显示",
+  "design_mode": "overall",
+  "front_axis": "+Y",
+  "up_axis": "+Z",
+  "views": [
+    "front",
+    "back",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "iso"
+  ],
+  "omit": [],
+  "iso": {
+    "azimuth_deg": 45.0,
+    "elevation_deg": 35.264
+  },
+  "render": {
+    "line_width_mm": 0.35,
+    "supersample": 2
+  },
+  "brief": {
+    "design_points": "整体造型为圆角矩形机身，正面横向凹槽，顶部圆形按键，背面圆形接口孔",
+    "best_view": "iso"
+  },
+  "step_file": "D:\\Programs\\DeepSeekHarness\\外观专利生成\\examples\\sample_product.step",
+  "_name": "sample_product",
+  "hlr_mode": "composite",
+  "verify_outline": false,
+  "solids_filtered": false
+}

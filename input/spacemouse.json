@@ -1,0 +1,15 @@
+{
+  "product_name": "三维鼠标（Hall Effect Spacemouse）",
+  "purpose": "用于三维设计软件的空间姿态操控",
+  "design_mode": "overall",
+  "front_axis": "+Z",
+  "up_axis": "+Y",
+  "views": ["front", "back", "left", "right", "top", "bottom", "iso"],
+  "omit": [],
+  "iso": { "azimuth_deg": 45.0, "elevation_deg": 35.264 },
+  "render": { "line_width_mm": 0.35, "supersample": 2 },
+  "brief": {
+    "design_points": "圆柱形底座配顶部操控旋钮，周向均布按键",
+    "best_view": "iso"
+  }
+}
