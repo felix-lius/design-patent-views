@@ -123,7 +123,7 @@ def cmd_analyze(cfg: dict) -> dict:
     import geom_core as geom
     from OCP.BRepCheck import BRepCheck_Analyzer
 
-    sh = geom.load_step(cfg["step_file"])
+    sh = geom.load_model(cfg["step_file"])
     stats = geom.shape_stats(sh)
     valid = geom.is_valid(sh)
     bb = geom.bbox3d(sh)
@@ -401,7 +401,7 @@ def make_orientation_previews(cfg: dict, target_px: int = 420) -> list:
     import geom_core as geom
     from PIL import Image, ImageDraw
 
-    shape = geom.load_step(cfg["step_file"])
+    shape = geom.load_model(cfg["step_file"])
     out_dir = os.path.join(pl.DIR_OUTPUT, cfg["_name"], "orientation")
     os.makedirs(out_dir, exist_ok=True)
 

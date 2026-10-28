@@ -113,19 +113,34 @@ def copy_common(dst: str) -> None:
         log("⚠ 缺少 packaging/自测清单.md")
 
 
-def patch_skill_md(dst: str) -> None:
-    """把 SKILL.md 里的下载地址占位符换成如实说明（避免 agent 去下载一个不存在的 URL）"""
+def patch_skill_md(dst: str, variant: str) -> None:
+    """按包形态调整 SKILL.md 里的安装引导。
+
+    lite 版：保留真实下载地址（用户可另装一键包，也可直接装依赖）
+    full 版：本包已自带 patent-cli.exe + _internal/，无需任何下载，
+             把「一键包」提示词替换为「已自带」说明，避免 agent 多此一举去下载。
+    """
     path = os.path.join(dst, "SKILL.md")
     if not os.path.exists(path):
         return
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
-    if DOWNLOAD_URL_TOKEN not in text:
-        return
-    text = text.replace(DOWNLOAD_URL_TOKEN, DOWNLOAD_URL_REPLACE)
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-    log("SKILL.md 下载占位符已替换为如实说明")
+    original = text
+
+    if variant == "full":
+        # 把「帮我装一下…一键包…」整段替换掉
+        import re
+        text = re.sub(
+            r"帮我装一下外观设计专利视图生成工具的一键包：\S+\n\n[^\n]*\n",
+            "本包已自带运行环境（patent-cli.exe + _internal/），无需下载、无需安装依赖。\n"
+            "直接运行包根目录的 patent-cli.exe 即可。\n",
+            text,
+        )
+
+    if text != original:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        log(f"SKILL.md 已按 {variant} 版调整安装引导")
 
 
 def copy_exe(dst: str) -> None:
@@ -164,7 +179,7 @@ def build(variant: str) -> None:
 
     copy_common(dst)
     copy_scripts(dst)
-    patch_skill_md(dst)
+    patch_skill_md(dst, variant)
     if variant == "full":
         copy_exe(dst)
 

@@ -26,11 +26,11 @@ python --version
 ```bash
 # 1. 下载 design-patent-views-win64.zip（约 92MB）
 
-# 2. 解压到用户目录，建议 C:\Tools\design-patent-views\
-#    解压后根目录应有：patent-cli.exe、_internal\、examples\、SKILL.md、INSTALL.md
+# 2. 解压到任意目录（用户目录、桌面等均可）
+#    解压后根目录应有：patent-cli.exe、_internal\、examples\、SKILL.md
 
 # 3. 验证
-cd C:\Tools\design-patent-views
+# 进入解压后的目录
 patent-cli.exe --help
 # 应看到 auto / analyze / render / dxf / check / run 六个子命令
 
