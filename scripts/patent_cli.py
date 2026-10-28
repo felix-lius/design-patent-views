@@ -651,6 +651,9 @@ def _error_hint(e: Exception) -> str:
         return "OCP 运行库缺失。轻量版请重跑 python install_deps.py；一键包请重新解压完整 zip。"
     if isinstance(e, FileNotFoundError):
         return "文件路径不对。检查 --step 指向的 STEP 文件是否存在（建议用绝对路径）。"
+    if isinstance(e, ValueError) and "只支持 STEP" in str(e):
+        return ("输入文件不是 STEP 格式。本工具只接受 .step / .stp；"
+                "请在 CAD 中「另存为 / 导出」为 STEP（AP203 或 AP214）后重试。")
     if isinstance(e, PermissionError):
         return "没有写权限。换一个可写目录运行，或设置环境变量 PATENT_OUT_DIR 指定输出目录。"
     if "step 读取失败" in str(e) or "ifselect_retfail" in msg:

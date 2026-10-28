@@ -58,24 +58,25 @@ def load_config(name: str) -> Dict[str, Any]:
 
 
 def step_path(name: str, cfg: Dict[str, Any] = None) -> str:
-    """定位 STEP 源文件。
+    """定位 STEP 模型文件。
 
     优先级：
     1. cfg 中的 step_file（patent-cli 写入）
-    2. examples/<name>.step / input/<name>.step（旧格式）
+    2. examples/ 或 input/ 下同名 .step / .stp
     """
     if cfg and cfg.get("step_file"):
         p = cfg["step_file"]
         if os.path.exists(p):
             return p
+
     for d in (DIR_EXAMPLES, DIR_INPUT):
-        p = os.path.join(d, f"{name}.step")
-        if os.path.exists(p):
-            return p
-        p2 = os.path.join(d, f"{name}.stp")
-        if os.path.exists(p2):
-            return p2
-    raise FileNotFoundError(f"找不到 {name}.step/.stp（已查 examples/ 与 input/）")
+        for ext in (".step", ".stp"):
+            p = os.path.join(d, f"{name}{ext}")
+            if os.path.exists(p):
+                return p
+    raise FileNotFoundError(
+        f"找不到 {name}.step / .stp（已查 examples/ 与 input/）"
+    )
 
 
 def write_json(path: str, data: Any) -> None:

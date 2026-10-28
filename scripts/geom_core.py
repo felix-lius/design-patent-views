@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import math
+import os
 from typing import Dict, List, Tuple
 
 from OCP.BRepAdaptor import BRepAdaptor_Curve
@@ -39,7 +40,45 @@ BBox = Tuple[float, float, float, float]  # xmin, ymin, xmax, ymax
 
 
 # ------------------------------------------------------------------ 载入与校验
-def load_step(path: str):
+SUPPORTED_EXTS = (".step", ".stp")
+
+# 常见但不支持的格式 → 给用户明确指引
+_UNSUPPORTED_HINT = {
+    ".iges": "IGES 会丢失实体拓扑（只剩曲面），无法做外观视图的精确投影",
+    ".igs":  "IGES 会丢失实体拓扑（只剩曲面），无法做外观视图的精确投影",
+    ".stl":  "STL 是三角网格，没有 B-Rep 拓扑，无法做精确的隐藏线消除",
+    ".obj":  "OBJ 是三角网格，没有 B-Rep 拓扑，无法做精确的隐藏线消除",
+    ".3mf":  "3MF 是三角网格，没有 B-Rep 拓扑，无法做精确的隐藏线消除",
+    ".sldprt": "SolidWorks 原生格式无法直接读取",
+    ".prt":   "UG/NX 或 Creo 原生格式无法直接读取",
+    ".catpart": "CATIA 原生格式无法直接读取",
+    ".x_t":   "Parasolid 格式暂不支持",
+    ".x_b":   "Parasolid 格式暂不支持",
+}
+
+
+def load_model(path: str):
+    """载入三维模型。**仅支持 STEP 格式**（.step / .stp）。
+
+    为什么只支持 STEP
+    -----------------
+    外观视图需要**精确的隐藏线消除**，这依赖完整的 B-Rep 实体拓扑。
+    STEP 是唯一能稳定携带实体拓扑的通用交换格式；
+    IGES 常丢实体（只剩曲面）、STL/OBJ 是三角网格，都无法胜任。
+    """
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext not in SUPPORTED_EXTS:
+        hint = _UNSUPPORTED_HINT.get(ext)
+        msg = (
+            f"不支持的文件格式：{ext or '(无扩展名)'}" + chr(10) +
+            "本工具只支持 STEP 格式（.step / .stp）。"
+        )
+        if hint:
+            msg += chr(10) + f"原因：{hint}。"
+        msg += chr(10) + "请在 CAD 软件中「另存为 / 导出」为 STEP（AP203 或 AP214）后重试。"
+        raise ValueError(msg)
+
     reader = STEPControl_Reader()
     status = reader.ReadFile(path)
     if status != IFSelect_RetDone:
@@ -49,6 +88,12 @@ def load_step(path: str):
     if shape.IsNull():
         raise RuntimeError(f"STEP 内容为空: {path}")
     return shape
+
+
+def load_step(path: str):
+    """向后兼容别名。"""
+    return load_model(path)
+
 
 
 def _count(shape, kind) -> int:
