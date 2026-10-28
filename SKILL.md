@@ -3,7 +3,7 @@ name: design-patent-views
 description: 从 STEP 三维模型自动生成中国外观设计专利申请所需的六视图、立体图、JPEG 提交件与可编辑 DXF。当用户提到外观专利、六视图、立体图、专利附图、STEP 出图、产品渲染图、外观设计图片时使用。
 ---
 
-# 外观专利六视图生成
+# 外观设计专利视图生成
 
 把 STEP 三维模型转成**可直接提交专利局**的六视图 + 立体图 + DXF，全部在本地完成，模型不上传。
 
@@ -62,7 +62,7 @@ python install_deps.py --check 2>/dev/null
 **用户选 A（一键包）** —— 把这段给他复制：
 
 ```
-帮我装一下外观专利六视图工具的一键包：<DOWNLOAD_URL>
+帮我装一下外观设计专利视图生成工具的一键包：https://github.com/felix-lius/design-patent-views/releases/download/v0.1.0/design-patent-views-win64.zip
 
 自包含整合包，解压即用，不需要装 Python。装好跑个冒烟测试进行确认。
 ```
@@ -70,7 +70,7 @@ python install_deps.py --check 2>/dev/null
 **用户选 B（轻量版）** —— 把这段给他复制：
 
 ```
-帮我装一下外观专利六视图工具的依赖。
+帮我装一下外观设计专利视图生成工具的依赖。
 
 需要：Python 3.12 + cadquery-ocp==7.7.2、Pillow、ezdxf、numpy
 基于技能目录里的 install_deps.py，运行它自动检测并只安装缺少的。

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""外观专利六视图工具 — 轻量版依赖安装（方案 B）
+"""外观设计专利视图生成工具 — 轻量版依赖安装（方案 B）
 
 核心原则：**先检测，只装缺的。**
 
@@ -186,14 +186,14 @@ def pip_install(args: list[str], mirror: str) -> bool:
 
 # ---------------------------------------------------------------- 主流程
 def main() -> int:
-    ap = argparse.ArgumentParser(description="外观专利六视图工具 — 依赖安装（只装缺的）")
+    ap = argparse.ArgumentParser(description="外观设计专利视图生成工具 — 依赖安装（只装缺的）")
     ap.add_argument("--check", action="store_true", help="只检测，不安装")
     ap.add_argument("--mirror", default="tuna", choices=list(MIRRORS), help="PyPI 镜像")
     ap.add_argument("--force-ocp", action="store_true", help="强制重装 OCP")
     args = ap.parse_args()
 
     print("=" * 56)
-    print(" 外观专利六视图工具 — 依赖安装")
+    print(" 外观设计专利视图生成工具 — 依赖安装")
     print("=" * 56)
     print(f"Python: {sys.version.split()[0]}  ({sys.executable})")
     print(f"平台  : {sys.platform} / {_tag()}")

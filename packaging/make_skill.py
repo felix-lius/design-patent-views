@@ -1,0 +1,194 @@
+# -*- coding: utf-8 -*-
+"""Skill 包构建脚本 —— 产出一个可直接丢给别的 agent 的技能压缩包
+
+用法
+----
+    python packaging/make_skill.py --lite    # 轻量版（约 1MB，需目标机 Python 3.12）
+    python packaging/make_skill.py --full    # 自包含版（约 92MB，含 patent-cli.exe，无需 Python）
+    python packaging/make_skill.py --both
+
+产物
+----
+    dist/design-patent-views-skill-lite.zip
+    dist/design-patent-views-skill-win64.zip
+
+zip 内部结构（单层根目录，解压到技能目录即可）
+------------------------------------------------
+    design-patent-views/
+      ├─ SKILL.md                 技能入口（frontmatter: name/description）
+      ├─ 自测清单.md              给接收方 agent 的验收步骤
+      ├─ INSTALL.md / README.md / DEVELOPMENT.md / LICENSE
+      ├─ 中国外观设计专利制图合规规格.md
+      ├─ install_deps.py          轻量版依赖安装器
+      ├─ scripts/*.py             引擎源码
+      ├─ examples/*.step          冒烟测试模型
+      ├─ docs/*.png               演示图
+      └─ （仅 full）patent-cli.exe + _internal/  自包含运行时
+
+与 packaging/build.py 的区别
+---------------------------
+build.py 打的是「发布用一键包」（扁平结构，给最终用户）；
+本脚本打的是「skill 包」（单层根目录 + 自测清单，给 agent 装载）。
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import sys
+import zipfile
+
+# 中文 Windows 控制台是 cp936，打印 ✓ 之类字符会 UnicodeEncodeError
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST = os.path.join(ROOT, "dist")
+STAGE = os.path.join(ROOT, "build", "skill")
+PKG_NAME = "design-patent-views"
+
+ZIP_LITE = os.path.join(DIST, "design-patent-views-skill-lite.zip")
+ZIP_FULL = os.path.join(DIST, "design-patent-views-skill-win64.zip")
+
+# 两版共有的文件（相对 ROOT）
+COMMON_FILES = [
+    "SKILL.md",
+    "INSTALL.md",
+    "README.md",
+    "DEVELOPMENT.md",
+    "LICENSE",
+    "中国外观设计专利制图合规规格.md",
+    "六视图生成流程图.svg",
+    "install_deps.py",
+]
+# 冒烟测试用的两个最小模型（powerbank 92KB / sample_product 35KB）
+EXAMPLES = ["examples/powerbank.step", "examples/sample_product.step"]
+DOCS = ["docs/demo-views.png", "docs/demo-iso.png"]
+# 打包期附带的自测清单
+SELFTEST_SRC = os.path.join(ROOT, "packaging", "自测清单.md")
+
+DOWNLOAD_URL_TOKEN = "<DOWNLOAD_URL>"
+DOWNLOAD_URL_REPLACE = "（暂无公开下载地址——请直接用方案 B 装依赖）"
+
+
+def log(msg: str) -> None:
+    print(f"==> {msg}", flush=True)
+
+
+def copy_scripts(dst: str) -> None:
+    src_dir = os.path.join(ROOT, "scripts")
+    out = os.path.join(dst, "scripts")
+    os.makedirs(out, exist_ok=True)
+    n = 0
+    for name in sorted(os.listdir(src_dir)):
+        if not name.endswith(".py"):
+            continue
+        shutil.copy2(os.path.join(src_dir, name), out)
+        n += 1
+    log(f"scripts/  {n} 个 .py")
+
+
+def copy_common(dst: str) -> None:
+    for rel in COMMON_FILES:
+        src = os.path.join(ROOT, rel)
+        if not os.path.exists(src):
+            log(f"⚠ 跳过缺失文件 {rel}")
+            continue
+        shutil.copy2(src, os.path.join(dst, os.path.basename(rel)))
+
+    for rel in EXAMPLES + DOCS:
+        src = os.path.join(ROOT, rel)
+        if not os.path.exists(src):
+            log(f"⚠ 跳过缺失文件 {rel}")
+            continue
+        target_dir = os.path.join(dst, os.path.dirname(rel))
+        os.makedirs(target_dir, exist_ok=True)
+        shutil.copy2(src, target_dir)
+
+    if os.path.exists(SELFTEST_SRC):
+        shutil.copy2(SELFTEST_SRC, os.path.join(dst, "自测清单.md"))
+    else:
+        log("⚠ 缺少 packaging/自测清单.md")
+
+
+def patch_skill_md(dst: str) -> None:
+    """把 SKILL.md 里的下载地址占位符换成如实说明（避免 agent 去下载一个不存在的 URL）"""
+    path = os.path.join(dst, "SKILL.md")
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    if DOWNLOAD_URL_TOKEN not in text:
+        return
+    text = text.replace(DOWNLOAD_URL_TOKEN, DOWNLOAD_URL_REPLACE)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    log("SKILL.md 下载占位符已替换为如实说明")
+
+
+def copy_exe(dst: str) -> None:
+    """full 版：把 dist/patent-cli 的 exe 与 _internal 拷进包根目录"""
+    src = os.path.join(DIST, "patent-cli")
+    exe = os.path.join(src, "patent-cli.exe")
+    internal = os.path.join(src, "_internal")
+    if not (os.path.exists(exe) and os.path.isdir(internal)):
+        raise SystemExit(
+            "✗ 找不到 dist/patent-cli/patent-cli.exe 或 _internal/，"
+            "请先运行 python packaging/build.py"
+        )
+    shutil.copy2(exe, dst)
+    shutil.copytree(internal, os.path.join(dst, "_internal"))
+    log("patent-cli.exe + _internal/ 已拷入")
+
+
+def make_zip(dst: str, zip_path: str) -> float:
+    if os.path.exists(zip_path):
+        os.remove(zip_path)
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for r, _dirs, files in os.walk(dst):
+            for f in files:
+                full = os.path.join(r, f)
+                arc = os.path.join(PKG_NAME, os.path.relpath(full, dst))
+                zf.write(full, arc.replace(os.sep, "/"))
+    return os.path.getsize(zip_path) / 1048576
+
+
+def build(variant: str) -> None:
+    log(f"构建 {variant} 版")
+    shutil.rmtree(STAGE, ignore_errors=True)
+    dst = os.path.join(STAGE, variant, PKG_NAME)
+    os.makedirs(dst, exist_ok=True)
+
+    copy_common(dst)
+    copy_scripts(dst)
+    patch_skill_md(dst)
+    if variant == "full":
+        copy_exe(dst)
+
+    zip_path = ZIP_FULL if variant == "full" else ZIP_LITE
+    mb = make_zip(dst, zip_path)
+    log(f"✓ {os.path.basename(zip_path)}  {mb:.1f} MB")
+
+
+def main() -> int:
+    args = [a.lower() for a in sys.argv[1:]]
+    if not args:
+        args = ["--lite"]
+    do_lite = "--both" in args or "--lite" in args
+    do_full = "--both" in args or "--full" in args
+    if not (do_lite or do_full):
+        print(__doc__)
+        return 2
+    if do_lite:
+        build("lite")
+    if do_full:
+        build("full")
+    print(f"\n产物目录：{DIST}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

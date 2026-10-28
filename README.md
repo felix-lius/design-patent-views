@@ -45,7 +45,7 @@
 不需要 Python，下载解压即用。
 
 ```
-帮我装一下外观专利六视图工具的一键包：<DOWNLOAD_URL>
+帮我装一下外观设计专利视图生成工具的一键包：https://github.com/felix-lius/design-patent-views/releases/download/v0.1.0/design-patent-views-win64.zip
 
 自包含整合包，解压即用，不需要装 Python。装好跑个冒烟测试进行确认。
 ```
@@ -53,7 +53,7 @@
 ### 方式 B · 自己装依赖（需要 Python 3.12）
 
 ```
-帮我装一下外观专利六视图工具的依赖。
+帮我装一下外观设计专利视图生成工具的依赖。
 
 需要：Python 3.12 + cadquery-ocp==7.7.2、Pillow、ezdxf、numpy
 基于技能目录里的 install_deps.py，运行它自动检测并只安装缺少的。
@@ -70,7 +70,7 @@
 装好后，直接对 agent 说：
 
 ```
-用外观专利六视图工具，把 <你的模型.step> 出成六视图
+用外观设计专利视图生成工具，把 <你的模型.step> 出成六视图
 ```
 
 流程会自动走：

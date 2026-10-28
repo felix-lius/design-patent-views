@@ -1,11 +1,11 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="design-patent-views-flow" name="外观专利六视图生成流程">
+  <diagram id="design-patent-views-flow" name="外观设计专利视图生成流程">
     <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="2100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="外观专利六视图自动生成 — 实现流程图（本地开源版 · 合规规格已固化）" style="text;html=1;align=center;fontSize=18;fontStyle=1;fontColor=#1e293b;" vertex="1" parent="1">
+        <mxCell id="title" value="外观设计专利视图自动生成 — 实现流程图（本地开源版 · 合规规格已固化）" style="text;html=1;align=center;fontSize=18;fontStyle=1;fontColor=#1e293b;" vertex="1" parent="1">
           <mxGeometry x="200" y="10" width="600" height="30" as="geometry" />
         </mxCell>
 

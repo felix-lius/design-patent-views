@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 打包配置 — 外观专利六视图工具（方案 A 一键包）
+"""PyInstaller 打包配置 — 外观设计专利视图生成工具（方案 A 一键包）
 
 用法
 ----
