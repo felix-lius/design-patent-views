@@ -48,7 +48,10 @@ license: MIT
 
 **网页版 AI（ChatGPT、Claude、Kimi、豆包、DeepSeek 网页版、文心一言）用不了** —— 它们跑在云端，访问不到用户磁盘，也无法在用户电脑上执行程序。
 
-**Claude Desktop / ChatGPT 桌面版**同理暂不可用：它们能连 MCP，但本工具还没提供 MCP server。
+**Claude Desktop**：支持本地 MCP，但本工具还没做 MCP server，暂时接不上。
+**ChatGPT 桌面版**：未实测，不下结论（它能接 MCP 连接器，理论上配合本地隧道可跑通）。
+
+这两类都不要对用户断言「肯定不行」——如实说「我们没验证过，你可以按上面的判断标准试」。
 
 用户问「能不能在网页版用」时，如实回答：
 
