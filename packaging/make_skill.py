@@ -49,7 +49,7 @@ DIST = os.path.join(ROOT, "dist")
 STAGE = os.path.join(ROOT, "build", "skill")
 PKG_NAME = "design-patent-views"
 
-ZIP_LITE = os.path.join(DIST, "design-patent-views-skill-lite.zip")
+ZIP_LITE = os.path.join(DIST, "design-patent-views-skill.zip")
 ZIP_FULL = os.path.join(DIST, "design-patent-views-skill-win64.zip")
 
 # 两版共有的文件（相对 ROOT）
@@ -77,17 +77,30 @@ def log(msg: str) -> None:
     print(f"==> {msg}", flush=True)
 
 
+# 只打包运行必需的脚本；开发/下载工具不进技能包
+#   fetch_step / fetch_wheel —— 开发期下载工具，终端用户用不到
+#   make_* / make_report_chart —— 生成测试件与验证图表，开发用
+_EXCLUDE_SCRIPTS = {
+    "fetch_step.py", "fetch_wheel.py",
+    "make_powerbank.py", "make_sample.py", "make_report_chart.py",
+}
+
+
 def copy_scripts(dst: str) -> None:
     src_dir = os.path.join(ROOT, "scripts")
     out = os.path.join(dst, "scripts")
     os.makedirs(out, exist_ok=True)
     n = 0
+    skipped = []
     for name in sorted(os.listdir(src_dir)):
         if not name.endswith(".py"):
             continue
+        if name in _EXCLUDE_SCRIPTS:
+            skipped.append(name)
+            continue
         shutil.copy2(os.path.join(src_dir, name), out)
         n += 1
-    log(f"scripts/  {n} 个 .py")
+    log(f"scripts/  {n} 个 .py（排除 {len(skipped)} 个开发工具）")
 
 
 def copy_common(dst: str) -> None:

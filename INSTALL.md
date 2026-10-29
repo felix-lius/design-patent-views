@@ -43,6 +43,9 @@ patent-cli.exe auto --step examples\powerbank.step --front +Y --up +Z --quiet
 - 不要修改或删除 `_internal/` 目录（运行库）
 - 如果杀软拦截，先告知用户，不要强行放行
 - 输出会写到**当前工作目录**下的 `output/`，可用环境变量 `PATENT_OUT_DIR` 改
+- 冒烟测试显式给了 `--front/--up` 是为了跳过交互。**实际使用时不给这两个参数**，
+  工具会分两轮返回 `need: orientation`（先问主视图、再问上方向），
+  由你把预览图给用户指认 —— 详见 `SKILL.md`。
 
 ---
 
