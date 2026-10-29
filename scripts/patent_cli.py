@@ -633,16 +633,24 @@ def main():
             "  patent-cli auto --step model.step\n"
             "  → 若返回 need=orientation，把 previews 给用户指认正面，\n"
             "    再跑 patent-cli auto --step model.step --front +Y --up +Z\n"
+            "\n"
+            "换个导出位置（设置一次就记住）：\n"
+            "  patent-cli config --out-dir \"D:/专利出图\"\n"
         ),
     )
     parser.add_argument("command",
-                        choices=["auto", "analyze", "render", "dxf", "check", "run"],
-                        help="auto=首次体验(自动+引导) | analyze/render/dxf/check | run=全流程")
+                        choices=["auto", "analyze", "render", "dxf", "check", "run", "config"],
+                        help="auto=首次体验(自动+引导) | analyze/render/dxf/check | run=全流程 | config=设置导出目录")
     parser.add_argument("--config", help="job.json 路径（与 --step 二选一）")
     parser.add_argument("--step", help="直接给 STEP 文件路径（自动生成配置，无需写 json）")
     parser.add_argument("--product-name", help="产品名（用于输出目录命名）")
     parser.add_argument("--front", help="正面方向：+X/-X/+Y/-Y/+Z/-Z")
     parser.add_argument("--up", help="上方方向：+X/-X/+Y/-Y/+Z/-Z")
+    parser.add_argument("--out-dir",
+                        help="导出根目录。普通命令里只对这次生效；"
+                             "配 config 命令使用时会被记住，以后一直用它。")
+    parser.add_argument("--reset", action="store_true",
+                        help="仅 config 命令：清除记住的导出目录，恢复默认")
     parser.add_argument("--solids-filtered", action="store_true",
                         help="声明已确认要全量出图（跳过 need=solid_selection 询问）")
     parser.add_argument("--quiet", action="store_true", help="只输出 JSON，不输出进度信息")
@@ -651,6 +659,21 @@ def main():
                              "解析不稳时用这个参数从文件读，保证干净。")
 
     args = parser.parse_args()
+
+    # ---- config 子命令：只管偏好设置，不碰模型 ----
+    if args.command == "config":
+        result = cmd_config(args)
+        _emit(result, args)
+        raise SystemExit(EXIT_OK if result.get("ok") else EXIT_INPUT_ERROR)
+
+    # ---- 定输出根目录（--out-dir > PATENT_OUT_DIR > 记住的目录 > 默认） ----
+    try:
+        pl.resolve_output_root(args.out_dir)
+    except OSError as e:
+        _emit({"ok": False,
+               "error": f"输出目录不可用：{e}",
+               "hint": "换一个可写目录，或用 patent-cli config --out-dir <路径> 设置。"}, args)
+        raise SystemExit(EXIT_INPUT_ERROR)
 
     # ---- 加载配置：--config 或 --step 二选一 ----
     try:
@@ -706,6 +729,10 @@ def main():
         if args.quiet:
             sys.stdout = real_stdout
 
+        if isinstance(result, dict):
+            result.setdefault("out_dir", pl.OUTPUT_ROOT)
+            result.setdefault("out_dir_source", pl.OUTPUT_ROOT_SOURCE)
+
         # 输出 JSON。ensure_ascii=True → 纯 ASCII，任何编码下都不乱码。
         _emit(result, args, real_stdout)
 
@@ -730,6 +757,60 @@ def main():
         raise SystemExit(EXIT_ENGINE_ERROR)
 
 
+def cmd_config(args) -> dict:
+    """导出目录的查看 / 设置 / 清除。
+
+    `config --out-dir X` 会把 X 记到用户主目录下的配置文件里，
+    以后所有命令默认导出到 X，除非再改或传 --out-dir 临时覆盖。
+    """
+    import userconfig
+
+    saved = userconfig.get_out_dir()
+
+    if args.reset:
+        try:
+            userconfig.clear_out_dir()
+        except OSError as e:
+            return {"ok": False, "action": "config",
+                    "error": f"清除配置失败：{e}",
+                    "hint": f"配置文件：{userconfig.config_file()}"}
+        path, src = pl.resolve_output_root(None)
+        return {
+            "ok": True, "action": "config", "changed": "reset",
+            "out_dir": path, "out_dir_source": src,
+            "message": "已清除记住的导出目录，恢复默认位置。",
+        }
+
+    if args.out_dir:
+        try:
+            p = userconfig.set_out_dir(args.out_dir)
+        except ValueError as e:
+            return {"ok": False, "action": "config", "error": str(e),
+                    "hint": "换一个已存在或可以创建的文件夹，例如 D:\\专利出图"}
+        except OSError as e:
+            return {"ok": False, "action": "config",
+                    "error": f"配置写不进去：{e}",
+                    "hint": f"目标文件：{userconfig.config_file()}"}
+        pl.set_output_root(p, "config")
+        return {
+            "ok": True, "action": "config", "changed": "out_dir",
+            "out_dir": p, "out_dir_source": "config",
+            "saved_to": userconfig.config_file(),
+            "message": f"已记住：以后都导出到 {p}",
+        }
+
+    path, src = pl.resolve_output_root(None)
+    src_cn = {"arg": "命令行 --out-dir", "env": "环境变量 PATENT_OUT_DIR",
+              "config": "你之前设置的目录", "default": "默认位置"}.get(src, src)
+    return {
+        "ok": True, "action": "config", "changed": None,
+        "out_dir": path, "out_dir_source": src, "out_dir_source_cn": src_cn,
+        "saved_out_dir": saved,
+        "saved_to": userconfig.config_file(),
+        "message": f"当前导出到 {path}（来源：{src_cn}）",
+    }
+
+
 def _error_hint(e: Exception) -> str:
     """把异常翻译成一句人话 + 下一步建议（P4 的错误话术）。"""
     msg = str(e).lower()
@@ -743,7 +824,8 @@ def _error_hint(e: Exception) -> str:
         return ("输入文件不是 STEP 格式。本工具只接受 .step / .stp；"
                 "请在 CAD 中「另存为 / 导出」为 STEP（AP203 或 AP214）后重试。")
     if isinstance(e, PermissionError):
-        return "没有写权限。换一个可写目录运行，或设置环境变量 PATENT_OUT_DIR 指定输出目录。"
+        return ("没有写权限。用 patent-cli config --out-dir <可写文件夹> 设置一次，"
+                "以后都会导出到那里。")
     if "step 读取失败" in str(e) or "ifselect_retfail" in msg:
         return ("STEP 文件解析失败：通常是文件下载不完整、被截断，或不是真正的 STEP 文件。"
                 "请确认文件以 END-ISO-10303-21 结尾，必要时重新获取。")

@@ -157,6 +157,20 @@ need=solid_selection                → 多实体时问保留哪些外观件
 > 为什么上方向也要确认：它决定俯视图和仰视图哪个在上、哪个在下，
 > 弄反会导致附图形式缺陷。
 
+### 存到哪个文件夹
+
+默认导出到程序所在目录。想换个地方，说一句就行：
+
+```
+以后都导出到 D:\专利出图
+```
+
+工具会记住，以后每次出图都放那里，不用重复交代。想改就再说一次；想恢复默认：
+
+```bash
+patent-cli config --reset
+```
+
 ![立体图示例](docs/demo-iso.png)
 
 ---
@@ -175,6 +189,14 @@ patent-cli analyze --step model.step --quiet
 patent-cli render  --step model.step --front +Y --up +Z --quiet
 patent-cli dxf     --step model.step --front +Y --up +Z --quiet
 patent-cli check   --step model.step --quiet
+
+# 导出目录：设置一次，以后都记住
+patent-cli config --out-dir "D:/专利出图"
+patent-cli config                      # 看当前导出到哪
+patent-cli config --reset              # 恢复默认
+
+# 只这一次换目录（不改记忆）
+patent-cli auto --step model.step --out-dir "D:/临时"
 ```
 
 退出码：`0` 成功 / `2` 需要你输入 / `3` 输入错误 / `4` 引擎错误
