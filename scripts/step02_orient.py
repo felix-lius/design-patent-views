@@ -61,7 +61,7 @@ def run(name: str, deflection: float = 0.05) -> dict:
     front, up = cfg["front_axis"], cfg["up_axis"]
     warnings: list[str] = []
 
-    shape = geom.load_step(rep01["step_file"])
+    shape = geom.load_model(rep01["step_file"])
 
     # 六视图轴系 + 立体图轴系
     axes = geom.view_axes(front, up)

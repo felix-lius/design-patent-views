@@ -51,7 +51,7 @@ def solids(shape):
 
 
 def cmd_list(path: str):
-    sh = geom.load_step(path)
+    sh = geom.load_model(path)
     items = sorted(solids(sh), key=lambda r: -(r[2][0] * r[2][1] * r[2][2]))
     print(f"{len(items)} 个实体（按体积降序）")
     print(f"{'idx':<5}{'faces':<7}{'尺寸 X×Y×Z (mm)':<28}{'包围盒 z':<20}")
@@ -63,7 +63,7 @@ def cmd_list(path: str):
 
 
 def cmd_keep(src: str, keep_idx: str, dst: str):
-    sh = geom.load_step(src)
+    sh = geom.load_model(src)
     want = {int(x) for x in keep_idx.split(",") if x.strip() != ""}
     builder = BRep_Builder()
     from OCP.TopoDS import TopoDS_Compound

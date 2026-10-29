@@ -66,7 +66,7 @@ def run(name: str) -> dict:
                 "warnings": warnings, "config": cfg}
 
     try:
-        shape = geom.load_step(step_file)
+        shape = geom.load_model(step_file)
     except Exception as e:
         return {"ok": False, "stage": "01_parse_validate",
                 "errors": [f"STEP 载入失败: {type(e).__name__}: {e}"],
