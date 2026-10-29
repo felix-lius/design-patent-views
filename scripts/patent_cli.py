@@ -128,12 +128,31 @@ def load_job(config_path: str) -> dict:
 def write_runtime_config(cfg: dict, name: str) -> str:
     """把配置写到 input/<name>.json 供 step01-05 读取。
 
-    必须剥离以下划线开头的内部字段（_name / _front_explicit / _up_explicit 等），
-    否则会把内部状态写回用户的配置文件，污染它。
+    两条铁律：
+    1. 剥离以下划线开头的内部字段（_name / _front_explicit 等），否则会把
+       内部状态写回用户的配置文件，污染它。
+    2. **与已有文件合并，不整体覆盖**。用 --step 跑一个已有产品时，cfg 里
+       只有几何相关字段，直接覆盖会丢掉用户手写的 purpose / brief
+       （设计要点、最佳视图），那是"简要说明"的原料，丢了很严重。
     """
     clean = {k: v for k, v in cfg.items() if not k.startswith("_")}
     path = pl.config_path(name)
-    pl.write_json(path, clean)
+
+    existing = {}
+    if os.path.exists(path):
+        try:
+            d = pl.read_json(path)
+            if isinstance(d, dict):
+                existing = d
+        except (OSError, ValueError):
+            existing = {}
+
+    # 产品名是从文件名自动推出来的，别让它盖掉用户写好的中文名
+    if cfg.get("_product_name_auto") and existing.get("product_name"):
+        clean.pop("product_name", None)
+
+    existing.update(clean)
+    pl.write_json(path, existing)
     return path
 
 
@@ -408,6 +427,8 @@ def build_cfg_from_step(step_path: str, product_name: str = None,
         # 标记：方位是否由用户明确指定（未指定则先引导确认）
         "_front_explicit": bool(front),
         "_up_explicit": bool(up),
+        # 产品名是不是从文件名自动推出来的（是的话不该覆盖用户手写的中文名）
+        "_product_name_auto": not bool(product_name),
     }
     return cfg
 
@@ -709,6 +730,19 @@ def main():
     if args.solids_filtered:
         cfg["solids_filtered"] = True
 
+    # ---- 分配输出目录 ----
+    # 每个模型一个独立目录；同名但来自不同 STEP 时自动加 -2、-3 后缀，
+    # 保证连着处理多个模型时，后一个不会把前一个的成果覆盖掉。
+    try:
+        _orig = cfg.get("_name") or "model"
+        _final = pl.resolve_run_name(_orig, cfg.get("step_file"))
+        if _final != _orig:
+            cfg["_name_original"] = _orig
+            cfg["_name"] = _final
+        pl.write_model_meta(cfg["_name"], cfg.get("step_file"), cfg.get("product_name"))
+    except OSError:
+        pass
+
     # ---- 执行 ----
     real_stdout = sys.stdout
     try:
@@ -732,6 +766,15 @@ def main():
         if isinstance(result, dict):
             result.setdefault("out_dir", pl.OUTPUT_ROOT)
             result.setdefault("out_dir_source", pl.OUTPUT_ROOT_SOURCE)
+            if cfg.get("_name"):
+                result.setdefault("product_dir",
+                                  os.path.join(pl.DIR_OUTPUT, cfg["_name"]))
+            if cfg.get("_name_original"):
+                result.setdefault("renamed_from", cfg["_name_original"])
+                result.setdefault(
+                    "renamed_reason",
+                    f"已有同名模型占用 {cfg['_name_original']}/，"
+                    f"本次结果放进 {cfg['_name']}/ 以免覆盖")
 
         # 输出 JSON。ensure_ascii=True → 纯 ASCII，任何编码下都不乱码。
         _emit(result, args, real_stdout)

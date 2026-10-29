@@ -161,6 +161,8 @@ patent-cli config --out-dir "D:/专利出图"
 
 产物结构不变，仍在导出根目录下的 `output/<产品名>/`、`logs/`。
 
+**每个模型一个独立文件夹，不会互相覆盖。** 同名但来自不同 STEP 文件时，自动加序号（`powerbank` → `powerbank-2` → `powerbank-3`），返回里会带 `renamed_reason` 说明。同一个模型重跑则复用原文件夹（覆盖上次结果，这是调参时的期望行为）。
+
 ### 两种传参方式（任选其一）
 
 ```bash

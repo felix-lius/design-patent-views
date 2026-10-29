@@ -171,6 +171,21 @@ need=solid_selection                → 多实体时问保留哪些外观件
 patent-cli config --reset
 ```
 
+每个模型出图都会单独建一个文件夹，连着做几个产品也不会互相覆盖：
+
+```
+D:\专利出图\
+  output\
+    充电宝\      ← 一个模型一个文件夹
+      submission\1-主视图.jpg … 7-立体图.jpg
+      all_views.dxf
+    蓝牙音箱\
+      submission\...
+  logs\
+```
+
+两个文件恰好同名（比如都叫 `model.step`）时，第二个自动放进 `model-2\`，不会覆盖第一个。同一个模型重跑则更新原文件夹。
+
 ![立体图示例](docs/demo-iso.png)
 
 ---

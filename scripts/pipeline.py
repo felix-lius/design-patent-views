@@ -118,8 +118,7 @@ def step_path(name: str, cfg: Dict[str, Any] = None) -> str:
     """定位 STEP 模型文件。
 
     优先级：
-    1. cfg 中的 step_file（patent-cli 写入）
-    2. examples/ 或 input/ 下同名 .step / .stp
+    1. cfg 中的 step_file（patent-cli 写入）    2. examples/ 或 input/ 下同名 .step / .stp
     """
     if cfg and cfg.get("step_file"):
         p = cfg["step_file"]
@@ -145,3 +144,71 @@ def write_json(path: str, data: Any) -> None:
 def read_json(path: str) -> Any:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+# ---------------------------------------------------------------- 目录分配
+MODEL_META_NAME = "model.json"
+
+
+def _norm(p: str) -> str:
+    return os.path.normcase(os.path.abspath(p))
+
+
+def model_source_of(name: str) -> Optional[str]:
+    """查 output/<name>/ 是哪个 STEP 生成的。查不到返回 None。
+
+    先看 model.json（新版会写），再退回 01 日志（旧目录只有日志）。
+    """
+    try:
+        d = read_json(os.path.join(DIR_OUTPUT, name, MODEL_META_NAME))
+        p = d.get("step_file")
+        if p:
+            return _norm(p)
+    except (OSError, ValueError):
+        pass
+    try:
+        d = read_json(os.path.join(DIR_LOGS, f"01_{name}.json"))
+        p = d.get("step_file")
+        if p:
+            return _norm(p)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def resolve_run_name(name: str, step_file: Optional[str]) -> str:
+    """给这次运行分配输出目录名，保证**不同模型绝不互相覆盖**。
+
+    规则：
+      · 目录不存在                → 用原名字
+      · 目录已存在，且来自同一个 STEP → 复用（同一模型重跑，本来就该覆盖旧结果）
+      · 目录已存在，但来自另一个 STEP → 依次试 <名字>-2、<名字>-3 ……
+
+    这样两个都叫 model.step 的文件（放在不同文件夹里）不会打架。
+    """
+    src = _norm(step_file) if step_file else None
+    candidate = name
+    n = 1
+    while os.path.isdir(os.path.join(DIR_OUTPUT, candidate)):
+        if src and model_source_of(candidate) == src:
+            return candidate
+        n += 1
+        candidate = f"{name}-{n}"
+        if n > 999:
+            import time
+            return f"{name}-{int(time.time())}"
+    return candidate
+
+
+def write_model_meta(name: str, step_file: Optional[str],
+                     product_name: Optional[str] = None) -> None:
+    """在 output/<name>/ 里留个来源标记，下次据此判断该不该复用目录。"""
+    if not step_file:
+        return
+    try:
+        write_json(os.path.join(DIR_OUTPUT, name, MODEL_META_NAME), {
+            "step_file": os.path.abspath(step_file),
+            "product_name": product_name,
+        })
+    except OSError:
+        pass
