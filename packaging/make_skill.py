@@ -74,8 +74,10 @@ EXAMPLES: list[str] = []
 # 这样在平台上仍能正常显示，而包内不含二进制。
 DOCS = []
 
-# README 图片改写的目标前缀
-RAW_BASE = "https://raw.githubusercontent.com/felix-lius/design-patent-views/main/"
+# README 里外链的目标前缀。
+# 用 jsDelivr 而不是 raw.githubusercontent.com：后者在国内基本不通
+# （实测连不上），jsDelivr 有国内节点，平台侧渲染 README 时图片能正常显示。
+RAW_BASE = "https://cdn.jsdelivr.net/gh/felix-lius/design-patent-views@main/"
 # 打包期附带的自测清单
 SELFTEST_SRC = os.path.join(ROOT, "packaging", "自测清单.md")
 
