@@ -65,7 +65,14 @@ COMMON_FILES = [
 ]
 # 冒烟测试用的两个最小模型（powerbank 92KB / sample_product 35KB）
 EXAMPLES = ["examples/powerbank.step", "examples/sample_product.step"]
-DOCS = ["docs/demo-views.png", "docs/demo-iso.png"]
+
+# ⚠️ SkillHub 禁止上传二进制文件（PNG/JPG 等），所以技能包里**不放图片**。
+# README 里的图片引用会在 patch_readme() 中改写为 GitHub 绝对地址，
+# 这样在平台上仍能正常显示，而包内不含二进制。
+DOCS = []
+
+# README 图片改写的目标前缀
+RAW_BASE = "https://raw.githubusercontent.com/felix-lius/design-patent-views/main/"
 # 打包期附带的自测清单
 SELFTEST_SRC = os.path.join(ROOT, "packaging", "自测清单.md")
 
@@ -124,6 +131,31 @@ def copy_common(dst: str) -> None:
         shutil.copy2(SELFTEST_SRC, os.path.join(dst, "自测清单.md"))
     else:
         log("⚠ 缺少 packaging/自测清单.md")
+
+
+def patch_readme_images(dst: str) -> None:
+    """把 README 里的本地图片引用改写为 GitHub 绝对地址。
+
+    原因：SkillHub 禁止上传二进制文件，包内不能带 PNG。
+    改成绝对地址后，图片在平台上仍能正常显示。
+    """
+    path = os.path.join(dst, "README.md")
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    original = text
+
+    # ![alt](docs/xxx.png) -> ![alt](https://raw.githubusercontent.com/.../docs/xxx.png)
+    import re
+    text = re.sub(r"\]\((docs/[^)]+)\)", lambda m: f"]({RAW_BASE}{m.group(1)})", text)
+    # <img src="docs/xxx.png"> 同理
+    text = re.sub(r'src="(docs/[^"]+)"', lambda m: f'src="{RAW_BASE}{m.group(1)}"', text)
+
+    if text != original:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        log("README 图片引用已改为 GitHub 绝对地址（避免二进制文件）")
 
 
 def patch_skill_md(dst: str, variant: str) -> None:
@@ -192,6 +224,7 @@ def build(variant: str) -> None:
 
     copy_common(dst)
     copy_scripts(dst)
+    patch_readme_images(dst)
     patch_skill_md(dst, variant)
     if variant == "full":
         copy_exe(dst)

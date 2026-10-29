@@ -1,6 +1,11 @@
 ---
 name: design-patent-views
 description: 从 STEP 三维模型自动生成中国外观设计专利申请所需的六视图、立体图、JPEG 提交件与可编辑 DXF。当用户提到外观专利、六视图、立体图、专利附图、STEP 出图、产品渲染图、外观设计图片时使用。
+slug: design-patent-views
+displayName: 外观设计专利视图生成工具
+version: 1.0.0
+summary: 从 STEP 模型生成外观设计专利的六视图+立体图+JPEG提交件+可编辑DXF，全程本地运行
+license: MIT
 ---
 
 # 外观设计专利视图生成

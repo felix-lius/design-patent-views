@@ -43,8 +43,13 @@ def log(msg: str) -> None:
 
 def main() -> int:
     log("清理旧产物")
-    for d in (DIST, BUILD):
-        shutil.rmtree(d, ignore_errors=True)
+    # 只删本脚本自己的产物，不要整个清空 dist/
+    # （dist/ 里还可能有 make_skill.py 生成的 skill 包）
+    shutil.rmtree(BUILD, ignore_errors=True)
+    shutil.rmtree(PKG, ignore_errors=True)
+    if os.path.exists(ZIP):
+        os.remove(ZIP)
+    os.makedirs(DIST, exist_ok=True)
 
     log("PyInstaller 构建")
     py = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
