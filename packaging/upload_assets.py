@@ -20,6 +20,14 @@ import urllib.request
 API = "https://api.github.com"
 UPLOAD = "https://uploads.github.com"
 
+# Windows 控制台默认 GBK，脚本里的 ✓/✗ 会直接抛 UnicodeEncodeError，
+# 而且是在"上传已经成功"之后才崩——看着像失败，其实成功了。
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 
 def ctx():
     c = ssl.create_default_context()
