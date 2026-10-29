@@ -51,7 +51,7 @@ analysis = Analysis(
         (os.path.join(_ROOT, "SKILL.md"), "."),
         (os.path.join(_ROOT, "INSTALL.md"), "."),
         (os.path.join(_ROOT, "README.md"), "."),
-        (os.path.join(_ROOT, "LICENSE"), "."),
+        (os.path.join(_ROOT, "LICENSE.md"), "."),
     ],
     hiddenimports=(
         ocp_hidden
