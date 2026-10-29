@@ -31,8 +31,12 @@ PKG = os.path.join(DIST, "patent-cli")
 BUILD = os.path.join(ROOT, "build")
 ZIP = os.path.join(DIST, "design-patent-views-win64.zip")
 
-# 随包放到根目录的文件
-ROOT_FILES = ["SKILL.md", "INSTALL.md", "README.md", "DEVELOPMENT.md", "LICENSE"]
+# 随包放到根目录的文件（与 skill 包保持一致：文档、合规依据、流程图、自测清单都要带）
+ROOT_FILES = [
+    "SKILL.md", "INSTALL.md", "README.md", "DEVELOPMENT.md", "LICENSE",
+    "中国外观设计专利制图合规规格.md", "六视图生成流程图.svg",
+    "packaging/自测清单.md",
+]
 # 只带一个最小示例做冒烟测试（powerbank 约 90KB），不带全部测试模型
 SMOKE_EXAMPLE = "examples/powerbank.step"
 
