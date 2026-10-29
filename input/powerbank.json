@@ -30,5 +30,7 @@
   "_name": "powerbank",
   "hlr_mode": "composite",
   "verify_outline": false,
-  "solids_filtered": false
+  "solids_filtered": false,
+  "_front_explicit": true,
+  "_up_explicit": true
 }

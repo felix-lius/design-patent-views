@@ -1,0 +1,31 @@
+{
+  "step_file": "D:\\Programs\\DeepSeekHarness\\外观专利生成\\examples\\powerbank.step",
+  "product_name": "o3",
+  "_name": "o3",
+  "design_mode": "overall",
+  "front_axis": "+Y",
+  "up_axis": "+Z",
+  "views": [
+    "front",
+    "back",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "iso"
+  ],
+  "omit": [],
+  "iso": {
+    "azimuth_deg": 45.0,
+    "elevation_deg": 35.264
+  },
+  "render": {
+    "line_width_mm": 0.35,
+    "supersample": 2
+  },
+  "hlr_mode": "composite",
+  "verify_outline": false,
+  "solids_filtered": false,
+  "_front_explicit": true,
+  "_up_explicit": true
+}

@@ -143,14 +143,19 @@ patent-cli auto --step 你的模型.step --front +Y --up +Z
 ```
 analyze  分析模型（实体数、尺寸、有效性）
    ↓
-need=orientation → 给你 6 张缩略图，问哪张是产品正面
+need=orientation (stage=main_view)  → 6 张缩略图，问哪张作为主视图
    ↓
-need=solid_selection → 多实体时问保留哪些外观件
+need=orientation (stage=up_axis)    → 4 张候选，问哪张是产品的上方
+   ↓
+need=solid_selection                → 多实体时问保留哪些外观件
    ↓
 出图 + 导 DXF + 33 项合规自检
 ```
 
-**最多问两个问题，10 秒出图。**
+**最多问三个问题（主视图、上方向、外观件），10 秒出图。**
+
+> 为什么上方向也要确认：它决定俯视图和仰视图哪个在上、哪个在下，
+> 弄反会导致附图形式缺陷。
 
 ![立体图示例](docs/demo-iso.png)
 

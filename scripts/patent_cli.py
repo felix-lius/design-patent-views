@@ -103,6 +103,11 @@ def load_job(config_path: str) -> dict:
     safe = "".join(ch for ch in pn if ch.isalnum() or ch in "-_") if pn else ""
     cfg["_name"] = safe if safe and safe.isascii() else stem
     cfg.setdefault("product_name", cfg["_name"])
+
+    # 必须在 setdefault 之前判断——否则默认值一填，就永远判定为"用户已指定"
+    _had_front = "front_axis" in cfg
+    _had_up = "up_axis" in cfg
+
     cfg.setdefault("design_mode", "overall")
     cfg.setdefault("front_axis", "+Y")
     cfg.setdefault("up_axis", "+Z")
@@ -110,6 +115,8 @@ def load_job(config_path: str) -> dict:
     cfg.setdefault("omit", [])
     cfg.setdefault("iso", {"azimuth_deg": 45.0, "elevation_deg": 35.264})
     cfg.setdefault("render", {"line_width_mm": 0.35, "supersample": 2})
+    cfg["_front_explicit"] = _had_front
+    cfg["_up_explicit"] = _had_up
     cfg.setdefault("hlr_mode", "composite")
     cfg.setdefault("verify_outline", False)
     cfg.setdefault("solids_filtered", False)
@@ -388,15 +395,40 @@ def build_cfg_from_step(step_path: str, product_name: str = None,
         "verify_outline": False,
         "solids_filtered": False,
         # 标记：方位是否由用户明确指定（未指定则先引导确认）
-        "_front_explicit": bool(front and up),
+        "_front_explicit": bool(front),
+        "_up_explicit": bool(up),
     }
     return cfg
 
 
-def make_orientation_previews(cfg: dict, target_px: int = 420) -> list:
-    """渲染 6 个候选朝向的缩略图，供用户指认「哪个是正面」。
+def _axis_letter(axis: str) -> str:
+    return axis.strip().upper().lstrip("+-")
 
-    返回 [{axis, file, size_px}]。图很小（420px），几秒即可出。
+
+def default_up_for(front: str) -> str:
+    """给定主视图方向，返回默认上方向。
+
+    主视图是 ±Z 时，上方向取 +Y；否则取 +Z。
+    """
+    return "+Y" if _axis_letter(front) == "Z" else "+Z"
+
+
+def perpendicular_axes(front: str) -> list:
+    """返回垂直于 front 的 4 个方向（候选上方向）。"""
+    f = _axis_letter(front)
+    if f == "X":
+        return ["+Y", "-Y", "+Z", "-Z"]
+    if f == "Y":
+        return ["+X", "-X", "+Z", "-Z"]
+    return ["+X", "-X", "+Y", "-Y"]
+
+
+def make_orientation_previews(cfg: dict, kind: str = "front", front: str = None,
+                              target_px: int = 420) -> list:
+    """渲染方位候选缩略图。
+
+    kind="front" : 6 个候选主视图方向（±X/±Y/±Z）
+    kind="up"    : 4 个候选上方向（垂直于给定 front）
     """
     import geom_core as geom
     from PIL import Image, ImageDraw
@@ -405,10 +437,20 @@ def make_orientation_previews(cfg: dict, target_px: int = 420) -> list:
     out_dir = os.path.join(pl.DIR_OUTPUT, cfg["_name"], "orientation")
     os.makedirs(out_dir, exist_ok=True)
 
+    # 组装待渲染的 (标签, 视线方向, 上方向)
+    jobs = []
+    if kind == "up" and front:
+        for up_axis in perpendicular_axes(front):
+            d = tuple(geom.AXIS_VECTORS[front])
+            u = tuple(geom.AXIS_VECTORS[up_axis])
+            jobs.append((f"main={front} up={up_axis}", d, u, up_axis))
+    else:
+        for axis_name, d, u in _PREVIEW_DIRS:
+            jobs.append((f"MAIN = {axis_name}", d, u, axis_name))
+
     results = []
-    for axis_name, d, u in _PREVIEW_DIRS:
+    for label, d, u, axis in jobs:
         try:
-            # 预览用较粗的离散精度，速度优先
             _prims, polys = geom.project_visible_full(shape, d, u, deflection=0.2)
             if not polys:
                 continue
@@ -427,12 +469,13 @@ def make_orientation_previews(cfg: dict, target_px: int = 420) -> list:
                 pts = [(x * scale + ox, -y * scale + oy) for x, y in poly]
                 if len(pts) >= 2:
                     dr.line(pts, fill="black", width=lw, joint="curve")
-            # 角落标注方向，方便用户指认
-            dr.text((8, 6), f"front = {axis_name}", fill="black")
+            dr.text((8, 6), label, fill="black")
 
-            path = os.path.join(out_dir, f"front_{axis_name.replace('+','p').replace('-','n')}.png")
+            safe = axis.replace("+", "p").replace("-", "n")
+            prefix = "up" if kind == "up" else "main"
+            path = os.path.join(out_dir, f"{prefix}_{safe}.png")
             img.save(path, "PNG")
-            results.append({"axis": axis_name, "file": path, "size_px": target_px})
+            results.append({"axis": axis, "file": path, "label": label, "size_px": target_px})
         except Exception:
             continue
     return results
@@ -442,32 +485,66 @@ def cmd_auto(cfg: dict) -> dict:
     """首次体验：一步到位出图，缺信息时返回 need 让 agent 问用户。"""
     name = cfg["_name"]
 
-    # ---- 1. 方位未确认 → 给 6 张缩略图让用户指认 ----
+    # ---- 1. 主视图方向未确认 → 给 6 张缩略图让用户指认 ----
     if not cfg.get("_front_explicit"):
-        previews = make_orientation_previews(cfg)
+        previews = make_orientation_previews(cfg, kind="front")
         return {
             "ok": False,
             "need": "orientation",
+            "stage": "main_view",
             "action": "auto",
             "product": name,
             "step_file": cfg["step_file"],
             "message": (
-                "模型的坐标轴和产品实际朝向不一定一致，出图前需要确认。"
-                "请把下面 6 张图给用户看，问：「哪一张是产品的正面（正常使用时的朝向）？」"
+                "模型的坐标轴和产品实际朝向不一定一致，出图前需要确认主视图方向。"
+                "请把下面 6 张图给用户看，问：「哪一张作为**主视图**"
+                "（即产品正常摆放时，从正面看过去的那一面）？」"
             ),
             "previews": previews,
             "options": [
-                {"label": f"正面 = {p['axis']}", "value": p["axis"], "image": p["file"]}
+                {"label": f"主视图 = {p['axis']}", "value": p["axis"], "image": p["file"]}
                 for p in previews
             ],
             "how_to_continue": (
-                "用户选定后，用 --front <方向> --up <方向> 重新调用：\n"
-                "  patent-cli auto --step <同一文件> --front +Y --up +Z\n"
-                "up 一般取垂直于 front 的那个轴（front=±Z 时 up 用 +Y，否则用 +Z）。"
+                "用户选定主视图后，先用 --front 重新调用（暂不给 --up），"
+                "系统会接着询问上方向：\n"
+                "  patent-cli auto --step <同一文件> --front +Y"
             ),
         }
 
-    # ---- 2. 分析模型 ----
+    # ---- 2. 上方向未确认 → 给 4 张候选（决定俯视图/仰视图）----
+    if not cfg.get("_up_explicit"):
+        front = cfg["front_axis"]
+        default_up = default_up_for(front)
+        previews = make_orientation_previews(cfg, kind="up", front=front)
+        return {
+            "ok": False,
+            "need": "orientation",
+            "stage": "up_axis",
+            "action": "auto",
+            "product": name,
+            "step_file": cfg["step_file"],
+            "main_view": front,
+            "default_up": default_up,
+            "message": (
+                f"主视图方向已定为 {front}。还需确认**上方向**——"
+                f"它决定俯视图和仰视图哪个在上、哪个在下，弄反会导致附图形式缺陷。\n"
+                f"请把下面 4 张图给用户看，问：「哪一张的朝向符合产品正常摆放时的"
+                f"**上方向**？」\n"
+                f"如果不想逐张看，直接用默认值 {default_up} 也可以。"
+            ),
+            "previews": previews,
+            "options": [
+                {"label": f"上方向 = {p['axis']}", "value": p["axis"], "image": p["file"]}
+                for p in previews
+            ],
+            "how_to_continue": (
+                f"用户选定后（或接受默认 {default_up}），用 --front 和 --up 一起调用：\n"
+                f"  patent-cli auto --step <同一文件> --front {front} --up {default_up}"
+            ),
+        }
+
+    # ---- 3. 分析模型 ----
     r_analyze = cmd_analyze(cfg)
     model = r_analyze["model"]
 
@@ -571,10 +648,10 @@ def main():
             # 命令行参数覆盖 config 里的值
             if args.front:
                 cfg["front_axis"] = args.front
+                cfg["_front_explicit"] = True
             if args.up:
                 cfg["up_axis"] = args.up
-            if args.front and args.up:
-                cfg["_front_explicit"] = True
+                cfg["_up_explicit"] = True
         elif args.step:
             cfg = build_cfg_from_step(args.step, args.product_name, args.front, args.up)
         else:
