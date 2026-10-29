@@ -68,7 +68,8 @@
 patent-cli auto --step 你的模型.step --front +Y --up +Z
 ```
 
-出图后打开 `output/<产品名>/submission/` 里的 7 张 JPEG，或 `sheet_grid.png` 六视图图幅。
+出图后打开**桌面「外观专利视图」文件夹**里 `output/<产品名>/submission/` 下的 7 张 JPEG，
+或同目录的 `sheet_grid.png` 六视图图幅。
 
 ---
 
