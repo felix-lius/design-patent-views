@@ -17,7 +17,7 @@ zip 内部结构（单层根目录，解压到技能目录即可）
     design-patent-views/
       ├─ SKILL.md                 技能入口（frontmatter: name/description）
       ├─ 自测清单.md              给接收方 agent 的验收步骤
-      ├─ INSTALL.md / README.md / DEVELOPMENT.md / LICENSE
+      ├─ INSTALL.md / README.md / DEVELOPMENT.md / LICENSE.md
       ├─ 中国外观设计专利制图合规规格.md
       ├─ install_deps.py          轻量版依赖安装器
       ├─ scripts/*.py             引擎源码
@@ -58,7 +58,7 @@ COMMON_FILES = [
     "INSTALL.md",
     "README.md",
     "DEVELOPMENT.md",
-    "LICENSE",
+    "LICENSE.md",
     "中国外观设计专利制图合规规格.md",
     "六视图生成流程图.svg",
     "install_deps.py",

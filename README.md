@@ -310,7 +310,7 @@ patent-cli auto --step model.step --out-dir "D:/临时"
 
 **MIT + Commons Clause** —— 自己用、改、内部部署都可以（含商业业务），但**不能把本工具本身拿去卖**。
 
-详见 [`LICENSE`](LICENSE)。
+详见 [`LICENSE.md`](LICENSE.md)。
 
 ---
 

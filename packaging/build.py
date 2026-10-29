@@ -33,7 +33,7 @@ ZIP = os.path.join(DIST, "design-patent-views-win64.zip")
 
 # 随包放到根目录的文件（与 skill 包保持一致：文档、合规依据、流程图、自测清单都要带）
 ROOT_FILES = [
-    "SKILL.md", "INSTALL.md", "README.md", "DEVELOPMENT.md", "LICENSE",
+    "SKILL.md", "INSTALL.md", "README.md", "DEVELOPMENT.md", "LICENSE.md",
     "中国外观设计专利制图合规规格.md", "六视图生成流程图.svg",
     "packaging/自测清单.md",
 ]
