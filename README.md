@@ -40,11 +40,38 @@
 
 本工具**在你自己的电脑上运行**，所以必须搭配**能执行本地命令的 AI agent**。
 
-| AI 使用方式 | 能否使用 | 说明 |
-|---|---|---|
-| **本地 CLI agent**<br>Claude Code、Cursor、DSH、Cherry Studio、Cline 等 | ✅ **可以** | 有命令行权限，可直接调用 |
-| **本地客户端 + MCP**<br>Claude Desktop 等 | ⏳ 暂未支持 | 需要 MCP server，可后续补充 |
-| **网页版 AI**<br>ChatGPT、Kimi、豆包、DeepSeek 网页版、文心一言等 | ❌ **不能** | 网页版看不到你的磁盘，也无法在你电脑上运行程序 |
+### 一条判断标准
+
+**它能不能在你电脑上跑命令行、读写本地文件？**
+能 → 可以用。不能 → 用不了。不用记清单，按这条判断就不会错。
+
+### 可以直接用的
+
+| 类型 | 代表工具 |
+|---|---|
+| **终端里的 agent** | Claude Code、Codex CLI、Gemini CLI、Aider、DSH |
+| **AI IDE / 编辑器插件** | Cursor、Windsurf、Cline、Roo Code、Trae、通义灵码 |
+| **本地 AI 工作台** | **WorkBuddy**（腾讯）、Cherry Studio（编码搭档） |
+
+共同点：都能在本地开终端、读写文件，可以直接调用 `patent-cli`。
+装好 `SKILL.md` 后，直接说「把这个 STEP 出成外观专利的六视图」即可。
+
+> WorkBuddy 兼容 OpenClaw 社区技能，可以直接导入本技能包。
+
+### 需要额外配置的
+
+| 工具 | 情况 |
+|---|---|
+| **Claude Desktop** | 支持 MCP，但本工具**暂未提供 MCP server**，目前用不了 |
+| **ChatGPT 桌面版** | 同上。它能连 MCP，但不能直接跑本地命令，**暂不可用** |
+| 其他只能通过 MCP 扩展的客户端 | 同上，需等 MCP server |
+
+> 这三类只要补一个 MCP server 就能用，属于「可以补但还没做」。
+
+### 用不了的
+
+**网页版**：ChatGPT、Claude、Kimi、豆包、DeepSeek 网页版、文心一言等。
+它们跑在云端，既访问不到你的磁盘，也无法在你电脑上执行程序。
 
 ### 为什么网页版不行
 
@@ -83,7 +110,7 @@ patent-cli auto --step 你的模型.step --front +Y --up +Z
 
 | 方式 | 做法 |
 |---|---|
-| **技能平台** | 在 DSH Market / ClawHub / SkillHub 搜索「外观设计专利视图」安装 |
+| **技能平台** | 在 DSH Market / ClawHub / SkillHub 搜索「外观设计专利视图」安装<br>（WorkBuddy 兼容 OpenClaw 社区技能，可直接导入） |
 | **手动** | 把仓库放进 agent 的技能目录：`git clone https://github.com/felix-lius/design-patent-views` |
 
 装好后，agent 就能识别「把这个 STEP 出成外观专利视图」这类请求。

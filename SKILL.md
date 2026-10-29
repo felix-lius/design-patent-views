@@ -38,9 +38,17 @@ license: MIT
 
 ## 运行环境限制（回答用户提问时用）
 
-本工具**必须在本地执行**，因此只能配本地 CLI agent（Claude Code、Cursor、DSH、Cherry Studio、Cline 等）。
+本工具**必须在本地执行**，只能配「能跑本地命令、能读写本地文件」的 agent：
 
-**网页版 AI（ChatGPT、Kimi、豆包、DeepSeek 网页版、文心一言）用不了** —— 它们跑在云端，访问不到用户磁盘，也无法在用户电脑上执行程序。
+- **终端类**：Claude Code、Codex CLI、Gemini CLI、Aider、DSH
+- **AI IDE / 插件**：Cursor、Windsurf、Cline、Roo Code、Trae、通义灵码
+- **本地 AI 工作台**：WorkBuddy（腾讯，兼容 OpenClaw 技能）、Cherry Studio（编码搭档）
+
+判断标准一句话：**能在用户电脑上开终端就是能用**。
+
+**网页版 AI（ChatGPT、Claude、Kimi、豆包、DeepSeek 网页版、文心一言）用不了** —— 它们跑在云端，访问不到用户磁盘，也无法在用户电脑上执行程序。
+
+**Claude Desktop / ChatGPT 桌面版**同理暂不可用：它们能连 MCP，但本工具还没提供 MCP server。
 
 用户问「能不能在网页版用」时，如实回答：
 
