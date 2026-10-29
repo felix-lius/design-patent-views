@@ -32,7 +32,7 @@ python --version
 # 3. 验证
 # 进入解压后的目录
 patent-cli.exe --help
-# 应看到 auto / analyze / render / dxf / check / run 六个子命令
+# 应看到 auto / analyze / render / dxf / check / run / config 七个子命令
 
 # 4. 冒烟测试（用包内自带的示例）
 patent-cli.exe auto --step examples\powerbank.step --front +Y --up +Z --quiet
@@ -42,7 +42,8 @@ patent-cli.exe auto --step examples\powerbank.step --front +Y --up +Z --quiet
 **注意**：
 - 不要修改或删除 `_internal/` 目录（运行库）
 - 如果杀软拦截，先告知用户，不要强行放行
-- 输出会写到**当前工作目录**下的 `output/`，可用环境变量 `PATENT_OUT_DIR` 改
+- 输出默认写到**桌面上的「外观专利视图」文件夹**（桌面不可写时退回当前工作目录）；
+  用户想换位置，用 `patent-cli.exe config --out-dir <路径>`，设置一次永久记住
 - 冒烟测试显式给了 `--front/--up` 是为了跳过交互。**实际使用时不给这两个参数**，
   工具会分两轮返回 `need: orientation`（先问主视图、再问上方向），
   由你把预览图给用户指认 —— 详见 `SKILL.md`。

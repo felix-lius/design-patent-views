@@ -7,8 +7,8 @@
 
 # 外观设计专利视图自动生成 — 最小验证链路（①→③）
 
-> 状态：**MVP 已跑通**（输入解析 → 几何预处理 → 六视图 + 立体图出图）
-> 第④⑤⑥步（专利规范化导出、合规自检、简要说明）尚未实现。
+> 状态：**①②③④⑤ 全部实现，9 个模型 / 6 个品类验证通过**。
+> ⑥「简要说明文书生成」尚未实现——工具只出图，不生成 docx。
 > 合规依据见 [`中国外观设计专利制图合规规格.md`](中国外观设计专利制图合规规格.md)
 
 ---
@@ -36,7 +36,7 @@ Python 3.12（DSH 内置运行时）
 安装（已验证可用的离线路径，因 pip 直连解包会被沙箱拦截）：
 
 ```powershell
-$vpy = "D:\Programs\DeepSeekHarness\外观专利生成\.venv\Scripts\python.exe"
+$vpy = "<你的虚拟环境>\Scripts\python.exe"
 & $vpy scripts\fetch_wheel.py cadquery-ocp "7.7.2-cp312-cp312-win_amd64"
 & $vpy -m pip install --no-index --no-deps .wheels\cadquery_ocp-7.7.2-cp312-cp312-win_amd64.whl
 ```
@@ -47,52 +47,109 @@ $vpy = "D:\Programs\DeepSeekHarness\外观专利生成\.venv\Scripts\python.exe"
 
 ```
 scripts/
-  spec.py                  合规规格常量（唯一参数来源）
-  pipeline.py              路径约定 / config 载入 / 日志读写
+  patent_cli.py            ★ CLI 主入口（auto/analyze/render/dxf/check/run/config）
+  spec.py                  合规规格常量（唯一参数来源）+ 视图中文名 + 提交件文件名规则
+  pipeline.py              输出根目录解析 / config 载入 / 日志读写 / 目录分配防覆盖
+  userconfig.py            用户偏好持久化（记住导出目录）
   geom_core.py             STEP 载入、校验、视图轴系、HLR 投影、折线离散
   render.py                统一比例计算、画布渲染、第一角/网格排版
-  step01_parse_validate.py ① 输入解析与校验
+  dxf_export.py            DXF 导出（原生 LINE/ARC/CIRCLE + 样条转 LWPOLYLINE）
+  step01_parse_validate.py ① 输入解析与校验（含逐实体 BRepCheck）
   step02_orient.py         ② 几何预处理（轴系 + 投影 + 统一比例 + 投影一致性校验）
-  step03_views.py          ③ 视图生成（单视图 + 两种图幅 + 总览）
-  run_batch.py             批处理总入口
+  step03_views.py          ③ 视图生成（单视图 + 两种图幅 + 总览 + DXF）
+  step04_normalize.py      ④ JPEG 提交件导出（中文文件名 + 300DPI 元数据）
+  step05_compliance_check.py ⑤ 合规自检 33 项
+  run_batch.py             批处理入口（一次跑 input/ 下全部任务）
+  extract_solids.py        装配体实体筛选（list 列出 / keep 保留指定实体）
+  verify_dxf.py            DXF 回读审计 + 重新渲染验证
   make_sample.py           生成示例 STEP 模型
+  make_powerbank.py        参数化生成移动电源 STEP
+  make_report_chart.py     生成验证结果图表
+  fetch_step.py            外部 STEP 模型下载器
   fetch_wheel.py           离线 wheel 下载器
+packaging/                 打包与发布工具链（build.py / make_skill.py / 上传脚本）
 input/<name>.json          config（产品名称/用途/主视图方位/出图模式/视图取舍）
 examples/<name>.step       三维源文件
-output/<name>/
+<导出根>/output/<产品名>/   ← 导出根默认是桌面「外观专利视图」，可用 config --out-dir 改
   raw/<view>.png           单视图（150×220mm @300DPI，无文字，名称由文件名承载）
   submission/<序号>-<中文视图名>.jpg  ★ 提交件（如 1-主视图.jpg，可直接上传专利局）
   sheet_first_angle.png    第一角投影图幅（含视图名称标注，投影对应关系严格）
   sheet_grid.png           2×3 网格图幅（图形更大，投影对应关系不严格）
   contact_sheet.png        全视图缩略总览（含立体图，内部审阅用）
   all_views.dxf            全部视图合一（可编辑矢量，1:1 mm）
-logs/01|02|03|04|05_<name>.json  各步结构化报告（05 为合规自检报告）
-logs/batch_summary.json    批处理汇总
+  model.json               该目录由哪个 STEP 生成（同名模型防覆盖的依据）
+<导出根>/logs/01|02|03|04|05_<name>.json  各步结构化报告（05 为合规自检报告）
+<导出根>/logs/batch_summary.json          批处理汇总
 ```
 
 ## 4. 用法
 
+**主入口是 `patent_cli.py`**（agent 和用户都走这条），`run_batch.py` 只用于批量跑 input/ 下的任务。
+
 ```powershell
-$vpy = "D:\Programs\DeepSeekHarness\外观专利生成\.venv\Scripts\python.exe"
+$vpy = "<你的虚拟环境>\Scripts\python.exe"
 $env:PYTHONIOENCODING = 'utf-8'
+
+# 一步出图（不给方位会先返回 need=orientation 引导）
+& $vpy scripts\patent_cli.py auto --step model.step
+
+# 已确认方位，全流程
+& $vpy scripts\patent_cli.py run --step model.step --front +Y --up +Z --quiet
+
+# 导出目录：设置一次永久记住
+& $vpy scripts\patent_cli.py config --out-dir "D:\专利出图"
+```
+
+批处理：
+
+```powershell
 & $vpy scripts\run_batch.py                 # 跑 input/ 下全部任务
 & $vpy scripts\run_batch.py sample_product  # 只跑指定任务
 ```
+
+### 4.1 导出目录优先级
+
+`--out-dir` 参数 > `PATENT_OUT_DIR` 环境变量 > `config --out-dir` 记住的目录 > 默认值。
+
+默认值：**打包运行 → 桌面「外观专利视图」**（桌面路径从注册表 `Shell Folders` 读，
+能正确处理 OneDrive 重定向；不可写则退回当前工作目录）；**源码运行 → 仓库根目录**
+（避免开发测试污染桌面）。
+
+实际来源写在 JSON 的 `out_dir_source` 字段里：`arg` / `env` / `config` / `default`。
+
+用户偏好存 `~/.design-patent-views/config.json`；主目录不可写时退到当前目录下的同名文件夹。
+
+> 默认目录若落在云同步盘（OneDrive / Dropbox / 坚果云…），`config` 会返回 `note` 提醒：
+> 外观设计申请日前是未公开的，图被同步上云等于交给第三方服务器。
+
+### 4.2 输出目录分配（防覆盖）
+
+每个模型一个 `output/<产品名>/`。目录已存在时，比对 `model.json`（老目录回退读 `logs/01_<name>.json`）
+里记录的 `step_file`：
+
+- **同源** → 复用原目录（同一模型重跑调参，覆盖旧结果）
+- **异源** → 自动加 `-2`、`-3` 后缀，绝不覆盖别的模型
+
+返回 JSON 会带 `renamed_from` / `renamed_reason` 说明发生了重命名。
 
 ## 5. config 字段
 
 ```jsonc
 {
-  "product_name": "智能控制器（示例）",
+  "product_name": "智能控制器（示例）",          // 中文产品名，用于文书与展示
   "purpose": "用于工业设备的参数设置与运行状态显示",
-  "design_mode": "overall",        // overall | partial（partial 尚未实现）
+  "step_file": "examples/sample_product.step",  // 绝对或相对路径
+  "design_mode": "overall",        // overall | partial（partial 目前按整体出图并告警）
   "front_axis": "+Y",              // 主视图观察方向：+X/-X/+Y/-Y/+Z/-Z
   "up_axis": "+Z",                 // 主视图屏幕向上方向
   "views": ["front","back","left","right","top","bottom","iso"],
   "omit": [],                      // 省略的视图（需在简要说明写明原因）
   "iso": { "azimuth_deg": 45.0, "elevation_deg": 35.264 },
   "render": { "line_width_mm": 0.35, "supersample": 2 },
-  "brief": { "design_points": "...", "best_view": "iso" }
+  "hlr_mode": "composite",         // composite | hybrid | per_solid（见 12.4）
+  "verify_outline": false,         // 逐视图验算轮廓覆盖度（耗时约 +60%）
+  "solids_filtered": false,        // 声明已人工筛选外观件，L8 检查据此放行
+  "brief": { "design_points": "...", "best_view": "iso" }  // 供 agent 写简要说明；工具本身不生成文书
 }
 ```
 
@@ -133,12 +190,11 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 ## 8. 已知限制 / 下一步
 
-**尚未实现（第④-⑥步）**
-- JPEG 导出与质量参数（当前 PNG）
-- 图内无文字的最终校验、图号生成
+**尚未实现**
+- ⑥ 简要说明文书生成（docx）——当前只出图，文书需 agent 依据 config 里的 `brief` 撰写
 - 局部外观模式的实线+虚线+点划线（`design_mode: partial` 目前按整体出图并告警）
-- 合规自检清单落地（`05_compliance_check.py`）
-- 简要说明 docx 生成
+- 套件/组件产品分别出图并标注「组件N某视图」
+- 旋转对称件的六视图雷同自动识别与提示
 
 **几何侧待加强**
 - 圆角/相切边处理：示例模型的 fillet 因布尔边问题未成功，需换更稳健的圆角策略
@@ -153,7 +209,7 @@ $env:PYTHONIOENCODING = 'utf-8'
 ## 9. 复现示例
 
 ```powershell
-$vpy = "D:\Programs\DeepSeekHarness\外观专利生成\.venv\Scripts\python.exe"
+$vpy = "<你的虚拟环境>\Scripts\python.exe"
 $env:PYTHONIOENCODING = 'utf-8'
 & $vpy scripts\make_sample.py      # 生成 examples/sample_product.step
 & $vpy scripts\run_batch.py        # 跑通 ①→③
@@ -204,7 +260,8 @@ spacemouse 含 13 个实体（底座、旋钮、按键等），当前实现是**
 - 若是一个产品 → 合并投影正确
 - 若是套件/组件产品 → 规范要求分别出图并标注「组件N某视图」
 
-当前只给了警告，未实现拆分。这是下一步要补的。
+已实现：`extract_solids.py` 人工筛选 + `--solids-filtered` 声明放行 + `need: solid_selection` 引导。
+但**哪几个实体属于外观是业务决策，无法自动判断**，必须人工确认。
 
 **问题 3：旋转对称件的六视图雷同**
 
@@ -225,7 +282,7 @@ python scripts\extract_solids.py list examples\spacemouse.step
 python scripts\extract_solids.py keep examples\spacemouse.step 8,9,4 examples\spacemouse_shell.step
 
 # 3. 正常走主链路出图
-python scripts\run_batch.py spacemouse_shell
+python scripts\patent_cli.py auto --step examples\spacemouse_shell.step --front +Y --up +Z --solids-filtered
 ```
 
 **验证效果**：保留 3 个外表面实体后，内部筋位线条全部消失，图纸变干净。
@@ -296,10 +353,10 @@ DXF 不是双击就能打开的格式（本机若未装 CAD 软件，系统会�
 
 ```powershell
 # 出图时自动生成 DXF（默认 native = 1:1）
-python scripts\run_batch.py spacemouse
+python scripts\patent_cli.py run --step examples\powerbank.step --front +Y --up +Z --quiet
 
 # 独立回读验证
-python scripts\verify_dxf.py spacemouse
+python scripts\verify_dxf.py powerbank
 ```
 
 如需按专利版面缩放（各视图会被压小，一般不用）：
@@ -313,7 +370,7 @@ dxf_export.export_all_views(name, views, path, scale_mode="page")
 
 `scripts/step05_compliance_check.py` 对提交件逐项核查，输出分级结果与 JSON 报告。
 
-### 12.1 检查项（31 项，五类）
+### 12.1 检查项（33 项，五类）
 
 | 类别 | 编号 | 内容 |
 |---|---|---|
@@ -370,8 +427,9 @@ dxf_export.export_all_views(name, views, path, scale_mode="page")
 ### 12.5 用法
 
 ```powershell
-python scripts\run_batch.py <name>                   # 全流程含 ④⑤
-python scripts\step05_compliance_check.py <name>     # 单独重跑自检
+python scripts\patent_cli.py run --step model.step --front +Y --up +Z   # 全流程含 ④⑤
+python scripts\patent_cli.py check --config input\powerbank.json         # 单独重跑自检
+python scripts\step05_compliance_check.py powerbank                     # 直接跑第⑤步
 ```
 
 ---
@@ -466,6 +524,24 @@ python scripts\step05_compliance_check.py <name>     # 单独重跑自检
 0.35mm 会因离散/抗锯齿误判（正常模型仅 88.8%），故取 1.0mm：
 **正常模型 100%、丢线模型 82.6%**，区分度清晰。
 
+## 14. 打包与发布
+
+| 产物 | 脚本 | 说明 |
+|---|---|---|
+| 轻量 skill 包 | `packaging/make_skill.py` | 约 125 KB，纯文本，上传 SkillHub |
+| 一键包 | `packaging/build.py` | PyInstaller onedir，解压 292 MB / zip 约 91.5 MB |
+| Release 资产 | `packaging/upload_assets.py` | 先删后传，单文件 30 分钟超时 + 3 次重试 |
+
+关键约束（都是踩过坑换来的）：
+
+- **onedir 而非 onefile**：onefile 每次启动都要解压 91 MB，慢且极易被杀软误判
+- `collect_all('OCP')`，**不做二进制裁剪**——vtk / webp 是 OCP 的静态依赖，裁掉会缺 DLL
+- 关闭 UPX（压缩后误报率明显上升）
+- 输出编码：`sys.stdout.reconfigure(encoding="utf-8")` + JSON `ensure_ascii=True`，
+  否则打包后在 GBK 控制台会乱码甚至崩在打印上
+- 输出写**当前工作目录**而非 exe 目录（exe 可能在 Program Files 只读）
+- skill 包**不能含二进制文件**（SkillHub 拒收），图片一律改 GitHub 绝对地址引用
+
 ---
 
-*生成时间：2026-10-28*
+*生成时间：2026-10-28 ／ 最后更新：2026-10-29*
