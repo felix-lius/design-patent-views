@@ -835,23 +835,32 @@ def cmd_config(args) -> dict:
                     "error": f"配置写不进去：{e}",
                     "hint": f"目标文件：{userconfig.config_file()}"}
         pl.set_output_root(p, "config")
-        return {
+        out = {
             "ok": True, "action": "config", "changed": "out_dir",
             "out_dir": p, "out_dir_source": "config",
             "saved_to": userconfig.config_file(),
             "message": f"已记住：以后都导出到 {p}",
         }
+        note = pl.default_root_note(p)
+        if note:
+            out["note"] = note
+        return out
 
     path, src = pl.resolve_output_root(None)
     src_cn = {"arg": "命令行 --out-dir", "env": "环境变量 PATENT_OUT_DIR",
               "config": "你之前设置的目录", "default": "默认位置"}.get(src, src)
-    return {
+    out = {
         "ok": True, "action": "config", "changed": None,
         "out_dir": path, "out_dir_source": src, "out_dir_source_cn": src_cn,
         "saved_out_dir": saved,
         "saved_to": userconfig.config_file(),
         "message": f"当前导出到 {path}（来源：{src_cn}）",
     }
+    if src == "default":
+        note = pl.default_root_note(path)
+        if note:
+            out["note"] = note
+    return out
 
 
 def _error_hint(e: Exception) -> str:

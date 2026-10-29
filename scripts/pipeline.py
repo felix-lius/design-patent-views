@@ -31,14 +31,57 @@ import userconfig
 # （如 Program Files），不能往那里写 output/logs。
 _FROZEN = getattr(sys, "frozen", False)
 
+DESKTOP_FOLDER_NAME = "外观专利视图"
+
+
+def desktop_dir() -> Optional[str]:
+    """拿真正的桌面路径（Windows 上可能是被 OneDrive 重定向过的那个）。"""
+    if os.name == "nt":
+        try:
+            import winreg
+            key = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+                v, _ = winreg.QueryValueEx(k, "Desktop")
+            v = os.path.expandvars(str(v))
+            if v and os.path.isdir(v):
+                return v
+        except (OSError, ImportError, ValueError):
+            pass
+    for name in ("Desktop", "桌面"):
+        p = os.path.join(os.path.expanduser("~"), name)
+        if os.path.isdir(p):
+            return p
+    return None
+
+
+def _pick_default_root() -> str:
+    """打包运行时默认导出到桌面下的固定文件夹——用户一眼能找到。
+
+    桌面不可用（受管机器、无此目录）就退回当前工作目录，功能不能因此失效。
+    """
+    d = desktop_dir()
+    if d:
+        cand = os.path.join(d, DESKTOP_FOLDER_NAME)
+        try:
+            os.makedirs(cand, exist_ok=True)
+            probe = os.path.join(cand, ".w")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("")
+            os.remove(probe)
+            return cand
+        except OSError:
+            pass
+    return os.getcwd()
+
+
 if _FROZEN:
     _exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    _DEFAULT_ROOT = os.getcwd()
+    _DEFAULT_ROOT = _pick_default_root()
     DIR_EXAMPLES = os.path.join(_exe_dir, "examples")     # 只读：随包资源
     _INPUT_BASE = os.getcwd()
 else:
     _SRC_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _DEFAULT_ROOT = _SRC_BASE
+    _DEFAULT_ROOT = _SRC_BASE        # 源码运行留在仓库里，别污染桌面
     DIR_EXAMPLES = os.path.join(_SRC_BASE, "examples")
     _INPUT_BASE = _SRC_BASE
 
@@ -48,6 +91,21 @@ OUTPUT_ROOT_SOURCE = "default"      # arg / env / config / default
 DIR_INPUT = os.path.join(_INPUT_BASE, "input")
 DIR_OUTPUT = os.path.join(OUTPUT_ROOT, "output")
 DIR_LOGS = os.path.join(OUTPUT_ROOT, "logs")
+
+
+def default_root_note(path: str) -> Optional[str]:
+    """默认目录踩到云同步盘时给一句提醒。
+
+    外观设计在申请日前是未公开的，图被 OneDrive 之类同步上去，
+    等于把未公开设计交给了第三方服务器——这和本工具「全程本地」的定位冲突。
+    """
+    low = path.lower()
+    for cloud in ("onedrive", "dropbox", "google drive", "icloud", "坚果云", "百度网盘"):
+        if cloud in low:
+            return (f"当前默认目录位于云同步盘（{cloud}），"
+                    f"出图会自动上传到云端。未公开的外观设计建议改到本地目录："
+                    f"patent-cli config --out-dir \"D:/专利出图\"")
+    return None
 
 
 def _ensure_dirs() -> None:
