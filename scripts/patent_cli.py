@@ -125,6 +125,19 @@ def load_job(config_path: str) -> dict:
 
 # ============================================================ 子命令
 
+def write_runtime_config(cfg: dict, name: str) -> str:
+    """把配置写到 input/<name>.json 供 step01-05 读取。
+
+    必须剥离以下划线开头的内部字段（_name / _front_explicit / _up_explicit 等），
+    否则会把内部状态写回用户的配置文件，污染它。
+    """
+    clean = {k: v for k, v in cfg.items() if not k.startswith("_")}
+    path = pl.config_path(name)
+    pl.write_json(path, clean)
+    return path
+
+
+
 def cmd_analyze(cfg: dict) -> dict:
     """分析模型：实体清单、尺寸、BRepCheck 有效性、建议方位。"""
     import geom_core as geom
@@ -185,8 +198,7 @@ def cmd_render(cfg: dict) -> dict:
     name = cfg["_name"]
 
     # 把 cfg 写成 input/<name>.json 供 step01-04 使用
-    cfg_path = pl.config_path(name)
-    pl.write_json(cfg_path, cfg)
+    write_runtime_config(cfg, name)
 
     rep01 = s01.run(name)
     pl.write_json(pl.step_log_path("01", name), rep01)
@@ -237,8 +249,7 @@ def cmd_dxf(cfg: dict) -> dict:
     import dxf_export
 
     name = cfg["_name"]
-    cfg_path = pl.config_path(name)
-    pl.write_json(cfg_path, cfg)
+    write_runtime_config(cfg, name)
 
     # 确保 02 已跑
     rep02_path = pl.step_log_path("02", name)

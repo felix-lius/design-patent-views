@@ -27,10 +27,7 @@
     "best_view": "iso"
   },
   "step_file": "D:\\Programs\\DeepSeekHarness\\外观专利生成\\examples\\powerbank.step",
-  "_name": "powerbank",
   "hlr_mode": "composite",
   "verify_outline": false,
-  "solids_filtered": false,
-  "_front_explicit": true,
-  "_up_explicit": true
+  "solids_filtered": false
 }
