@@ -60,11 +60,14 @@ COMMON_FILES = [
     "DEVELOPMENT.md",
     "LICENSE.md",
     "中国外观设计专利制图合规规格.md",
-    "六视图生成流程图.svg",
     "install_deps.py",
 ]
-# 冒烟测试用的两个最小模型（powerbank 92KB / sample_product 35KB）
-EXAMPLES = ["examples/powerbank.step", "examples/sample_product.step"]
+# 技能包**只放 .md 和 .py**。
+# SkillHub 会逐个校验文件类型，实测拒收过：LICENSE（无扩展名）、examples/*.step。
+# 所以示例模型和流程图都不进包，改用 GitHub 绝对地址引用：
+#   · 示例模型 → README/自测清单里给下载命令
+#   · 流程图   → README 里的链接改写为 raw 地址
+EXAMPLES: list[str] = []
 
 # ⚠️ SkillHub 禁止上传二进制文件（PNG/JPG 等），所以技能包里**不放图片**。
 # README 里的图片引用会在 patch_readme() 中改写为 GitHub 绝对地址，
@@ -134,10 +137,11 @@ def copy_common(dst: str) -> None:
 
 
 def patch_readme_images(dst: str) -> None:
-    """把 README 里的本地图片引用改写为 GitHub 绝对地址。
+    """把 README 里的本地文件引用改写为 GitHub 绝对地址。
 
-    原因：SkillHub 禁止上传二进制文件，包内不能带 PNG。
-    改成绝对地址后，图片在平台上仍能正常显示。
+    原因：SkillHub 会逐个校验包内文件类型，实测拒收过
+    LICENSE（无扩展名）和 examples/*.step。所以包里只放 .md / .py，
+    图片和流程图一律改成绝对地址引用，在平台上仍能正常显示。
     """
     path = os.path.join(dst, "README.md")
     if not os.path.exists(path):
@@ -151,11 +155,14 @@ def patch_readme_images(dst: str) -> None:
     text = re.sub(r"\]\((docs/[^)]+)\)", lambda m: f"]({RAW_BASE}{m.group(1)})", text)
     # <img src="docs/xxx.png"> 同理
     text = re.sub(r'src="(docs/[^"]+)"', lambda m: f'src="{RAW_BASE}{m.group(1)}"', text)
+    # 根目录下的流程图等本地文件链接（包内不再附带 .svg，改指 GitHub）
+    text = re.sub(r"\]\((?!https?://|#|mailto:)([^)/]+\.svg)\)",
+                  lambda m: f"]({RAW_BASE}{m.group(1)})", text)
 
     if text != original:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        log("README 图片引用已改为 GitHub 绝对地址（避免二进制文件）")
+        log("README 本地引用已改为 GitHub 绝对地址（避免平台拒收）")
 
 
 def patch_skill_md(dst: str, variant: str) -> None:

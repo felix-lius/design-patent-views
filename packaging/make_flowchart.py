@@ -7,7 +7,7 @@
 结果是"线穿框""底部文字压边框"这类问题永远修不干净。这里把布局
 参数化：改一个 y 值，下面的元素整体让位，连线自动跟着走。
 
-输出：六视图生成流程图.svg（仓库根目录）
+输出：flowchart.svg（仓库根目录，英文名避免 URL 编码问题）
 """
 from __future__ import annotations
 
@@ -275,7 +275,7 @@ def build() -> str:
 
 def main():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out = os.path.join(base, "六视图生成流程图.svg")
+    out = os.path.join(base, "flowchart.svg")
     svg = build()
     with open(out, "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')

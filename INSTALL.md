@@ -64,8 +64,9 @@ python install_deps.py
 # 3. 验证（四项都 ✓ 才算成功）
 python install_deps.py --check
 
-# 4. 冒烟测试
-python scripts\patent_cli.py auto --step examples\powerbank.step --front +Y --up +Z --quiet
+# 4. 冒烟测试（技能包不含示例模型，先下载一个，约 90KB）
+python -c "import urllib.request;urllib.request.urlretrieve('https://raw.githubusercontent.com/felix-lius/design-patent-views/main/examples/powerbank.step','powerbank.step')"
+python scripts\patent_cli.py auto --step powerbank.step --front +Y --up +Z --quiet
 ```
 
 依赖版本已固定在 `install_deps.py` 里（`OCP 7.7.2` 零依赖版本），

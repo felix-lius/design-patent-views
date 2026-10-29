@@ -323,4 +323,4 @@ patent-cli auto --step model.step --out-dir "D:/临时"
 | [`SKILL.md`](SKILL.md) | AI agent 使用指令 |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | 技术实现、设计决策、能力边界 |
 | [`中国外观设计专利制图合规规格.md`](中国外观设计专利制图合规规格.md) | CNIPA 合规规格 v1.0 |
-| [`六视图生成流程图.svg`](六视图生成流程图.svg) | 整体流程图 |
+| [`flowchart.svg`](flowchart.svg) | 整体流程图 |
