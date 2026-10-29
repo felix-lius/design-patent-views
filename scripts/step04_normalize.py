@@ -6,7 +6,7 @@
 * 把 ③ 产出的单视图 PNG 转为**专利局可接受的 JPEG**
 * 写入 300 DPI 元数据（150×220mm 版面 → 1772×2598px）
 * 保证：白底、RGB、无文字、无图号、纯实线（由 ③ 的渲染路径保证）
-* 输出 output/<name>/submission/<view>.jpg + logs/04_<name>.json
+* 输出 output/<name>/submission/<序号>-<中文视图名>.jpg + logs/04_<name>.json
 
 为什么单视图提交、图幅不提交
 --------------------------
@@ -35,6 +35,14 @@ def run(name: str) -> dict:
     out_dir = os.path.join(pl.DIR_OUTPUT, name, "submission")
     os.makedirs(out_dir, exist_ok=True)
 
+    # 清掉上次留下的 JPEG（含旧版英文命名），否则新旧混在一起，上传时容易传错
+    for f in os.listdir(out_dir):
+        if f.lower().endswith((".jpg", ".jpeg")):
+            try:
+                os.remove(os.path.join(out_dir, f))
+            except OSError:
+                pass
+
     from PIL import Image
 
     items = []
@@ -55,7 +63,7 @@ def run(name: str) -> dict:
         elif im.mode != "RGB":
             im = im.convert("RGB")
 
-        dst = os.path.join(out_dir, f"{view}.jpg")
+        dst = os.path.join(out_dir, f"{spec.view_filename(view)}.jpg")
         im.save(
             dst,
             "JPEG",
@@ -73,6 +81,7 @@ def run(name: str) -> dict:
         items.append({
             "view": view,
             "name_cn": o["name_cn"],
+            "filename": os.path.basename(dst),
             "file": dst,
             "format": chk.format,
             "pixel": list(chk.size),
@@ -108,7 +117,7 @@ def main():
     pl.write_json(pl.step_log_path("04", name), rep)
     print(f"[04] {len(rep['items'])} 张 JPEG，共 {rep['total_mb']} MB -> {rep['submission_dir']}")
     for it in rep["items"]:
-        print(f"  {it['name_cn']:6s} {it['pixel'][0]}x{it['pixel'][1]}px  "
+        print(f"  {it['filename']:14s} {it['pixel'][0]}x{it['pixel'][1]}px  "
               f"{it['dpi'][0]}dpi  {it['size_bytes']//1024}KB")
 
 

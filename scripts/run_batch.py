@@ -114,7 +114,7 @@ def main():
         print("  sheet_first_angle.png 第一角投影图幅")
         print("  sheet_grid.png        网格图幅")
         print("  all_views.dxf         全部视图合一（可编辑矢量，1:1 mm）")
-        print("  submission/*.jpg      提交件（150×220mm @300DPI，可直接上传专利局）")
+        print("  submission/<序号>-<视图名>.jpg  提交件（150×220mm @300DPI，可直接上传专利局）")
         print("  logs/05_<name>.json   合规自检报告")
         print("\n---------------- 在线查看 DXF ----------------")
         print("本机未装 CAD 时，可直接用浏览器打开下列网址上传 DXF 查看：")

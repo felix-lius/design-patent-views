@@ -61,7 +61,7 @@ input/<name>.json          config（产品名称/用途/主视图方位/出图�
 examples/<name>.step       三维源文件
 output/<name>/
   raw/<view>.png           单视图（150×220mm @300DPI，无文字，名称由文件名承载）
-  submission/<view>.jpg    ★ 提交件（JPEG，可直接上传专利局）
+  submission/<序号>-<中文视图名>.jpg  ★ 提交件（如 1-主视图.jpg，可直接上传专利局）
   sheet_first_angle.png    第一角投影图幅（含视图名称标注，投影对应关系严格）
   sheet_grid.png           2×3 网格图幅（图形更大，投影对应关系不严格）
   contact_sheet.png        全视图缩略总览（含立体图，内部审阅用）

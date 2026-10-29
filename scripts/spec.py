@@ -36,6 +36,23 @@ VIEW_NAMES_CN = {
 }
 SIX_VIEWS = ["front", "back", "left", "right", "top", "bottom"]
 
+# 提交件用中文文件名：上传专利系统时文件名即视图名，不必再人工对照
+VIEW_FILENAME_PREFIX = {"front": "1", "back": "2", "left": "3",
+                        "right": "4", "top": "5", "bottom": "6", "iso": "7"}
+
+
+def view_filename(view: str, numbered: bool = True) -> str:
+    """视图 key → 提交件文件名（不含扩展名）。
+
+    numbered=True 带序号前缀，保证在资源管理器里按视图顺序排列——
+    纯中文名会按拼音排序（俯/后/立/主/左/右），顺序全乱。
+    """
+    cn = VIEW_NAMES_CN.get(view, view)
+    if numbered:
+        return f"{VIEW_FILENAME_PREFIX.get(view, '9')}-{cn}"
+    return cn
+
+
 # ---------------------------------------------------------------- 立体图
 ISO_AZIMUTH_DEG = 45.0                # 侧 45° 视角
 ISO_ELEVATION_DEG = 35.264            # 等轴测标准仰角

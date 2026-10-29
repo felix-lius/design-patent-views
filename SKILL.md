@@ -275,7 +275,7 @@ patent-cli auto --step <同一文件> --front +Y --up +Z
 
 出图成功后，给用户这三样：
 
-1. **提交件**：`output/<name>/submission/*.jpg` — 7 张，可直接上传专利局电子申请
+1. **提交件**：`output/<name>/submission/` — 7 张，中文命名（`1-主视图.jpg` 到 `7-立体图.jpg`），文件名即视图名，可直接按序上传专利局电子申请
 2. **可编辑图**：`output/<name>/all_views.dxf` — 1:1 mm，可用 CAD 改
 3. **合规自检**：`output/<name>/../logs/05_<name>.json` — 33 项检查结果
 
