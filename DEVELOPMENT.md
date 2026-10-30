@@ -111,9 +111,15 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 `--out-dir` 参数 > `PATENT_OUT_DIR` 环境变量 > `config --out-dir` 记住的目录 > 默认值。
 
-默认值：**打包运行 → 桌面「外观专利视图」**（桌面路径从注册表 `Shell Folders` 读，
-能正确处理 OneDrive 重定向；不可写则退回当前工作目录）；**源码运行 → 仓库根目录**
-（避免开发测试污染桌面）。
+默认值：**桌面「外观专利视图」——打包版与源码版一致**（桌面路径从注册表 `Shell Folders`
+读，能正确处理 OneDrive 重定向；不可写则退回当前工作目录）。
+
+> v1.0 的旧行为是「源码运行 → 仓库根目录（避免开发测试污染桌面）」。这条**已取消**：
+> 轻量版用户按 SKILL.md 去桌面找图永远找不到，是文档与实现不一致的硬伤。
+> 开发/批量跑想落仓库里，用 `PATENT_OUT_DIR` 或 `--out-dir` 显式指定即可。
+
+**默认根不再在 import 阶段建目录**（`ensure_dirs()` 改为按需调用）：否则连 `--help`
+都会在默认根里建出 `output/`、`logs/`，"还没得到用户确认就落盘"。
 
 实际来源写在 JSON 的 `out_dir_source` 字段里：`arg` / `env` / `config` / `default`。
 

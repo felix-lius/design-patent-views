@@ -3,10 +3,12 @@
 
 输出根目录（可配置）
 --------------------
-默认值：
-  · 源码运行 → 仓库根目录（避免开发测试污染桌面）
-  · 打包运行 → 桌面「外观专利视图」（用户出完图一眼能看到；
-                桌面不可写时退回当前工作目录）
+默认值：**桌面「外观专利视图」文件夹**。打包版与源码版（轻量版）行为一致——
+用户在哪种形态下用，出完图都应该一眼能看到。桌面不可写时退回当前工作目录。
+
+开发/批量跑想落到仓库里，用 `--out-dir` 或 `PATENT_OUT_DIR` 显式指定（优先级更高）。
+（v1.0 的旧行为是"源码运行落在仓库根目录"，导致轻量版用户永远看不到桌面默认目录，
+  与 SKILL.md 的承诺不符，已修正。）
 
 用户可用三种方式改：
   1. 命令行 `--out-dir <路径>`     —— 只对这一次生效
@@ -55,39 +57,53 @@ def desktop_dir() -> Optional[str]:
     return None
 
 
-def _pick_default_root() -> str:
-    """打包运行时默认导出到桌面下的固定文件夹——用户一眼能找到。
+def default_root() -> str:
+    """默认输出根：桌面「外观专利视图」文件夹；取不到桌面就退回当前工作目录。
 
-    桌面不可用（受管机器、无此目录）就退回当前工作目录，功能不能因此失效。
+    **纯路径计算，不建目录、不写探测文件**：没得到用户确认（选模式/选目录）
+    之前，磁盘上不该出现任何东西。可写性检查推迟到 resolve_output_root()。
     """
     d = desktop_dir()
     if d:
-        cand = os.path.join(d, DESKTOP_FOLDER_NAME)
-        try:
-            os.makedirs(cand, exist_ok=True)
-            probe = os.path.join(cand, ".w")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-            return cand
-        except OSError:
-            pass
+        return os.path.join(d, DESKTOP_FOLDER_NAME)
     return os.getcwd()
+
+
+# 兼容旧名字
+_pick_default_root = default_root
+
+
+def _root_writable(path: str) -> bool:
+    """目录能建、能写就 True（会顺手建出来——只在真要往这里落盘时调用）。"""
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, ".patent_write_probe")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
 
 
 if _FROZEN:
     _exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    _DEFAULT_ROOT = _pick_default_root()
     DIR_EXAMPLES = os.path.join(_exe_dir, "examples")     # 只读：随包资源
     _INPUT_BASE = os.getcwd()
 else:
     _SRC_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _DEFAULT_ROOT = _SRC_BASE        # 源码运行留在仓库里，别污染桌面
     DIR_EXAMPLES = os.path.join(_SRC_BASE, "examples")
     _INPUT_BASE = _SRC_BASE
 
+# 默认输出根：**打包版和轻量版（源码运行）一致，都用桌面**。
+# v1.0 的旧行为是"源码运行落在仓库根目录"，结果轻量版用户按 SKILL.md 去桌面找图
+# 永远找不到——文档与实现不一致，属于硬伤，已修正。
+_DEFAULT_ROOT = default_root()
+
 OUTPUT_ROOT = _DEFAULT_ROOT
 OUTPUT_ROOT_SOURCE = "default"      # arg / env / config / default
+# 默认根（桌面）不可写、被迫退回当前目录时置 True，好让上层如实告诉用户
+DEFAULT_ROOT_FELL_BACK = False
 
 DIR_INPUT = os.path.join(_INPUT_BASE, "input")
 DIR_OUTPUT = os.path.join(OUTPUT_ROOT, "output")
@@ -109,7 +125,13 @@ def default_root_note(path: str) -> Optional[str]:
     return None
 
 
-def _ensure_dirs() -> None:
+def ensure_dirs() -> None:
+    """按需创建 input/ output/ logs/。
+
+    **刻意不在 import 阶段调用**：一 import 就建目录，会让"还没得到用户确认"
+    的那次调用也在磁盘上留下痕迹（实测：连 `--help` 都在技能目录里建出了
+    output/ 与 logs/）。现在由真正要写文件的步骤显式调用，没确认就一个字节不落盘。
+    """
     for _d in (DIR_INPUT, DIR_OUTPUT, DIR_LOGS):
         try:
             os.makedirs(_d, exist_ok=True)
@@ -117,17 +139,20 @@ def _ensure_dirs() -> None:
             pass
 
 
-_ensure_dirs()
+# 兼容旧名字（外部脚本/旧代码可能引用 _ensure_dirs）
+_ensure_dirs = ensure_dirs
 
 
 def set_output_root(path: str, source: str = "arg") -> str:
-    """切换输出根目录（运行时生效），返回规范化后的绝对路径。"""
+    """切换输出根目录（运行时生效），返回规范化后的绝对路径。
+
+    只改路径，**不建目录**——建目录由 ensure_dirs()/具体写盘步骤负责。
+    """
     global OUTPUT_ROOT, OUTPUT_ROOT_SOURCE, DIR_OUTPUT, DIR_LOGS
     OUTPUT_ROOT = os.path.abspath(path)
     OUTPUT_ROOT_SOURCE = source
     DIR_OUTPUT = os.path.join(OUTPUT_ROOT, "output")
     DIR_LOGS = os.path.join(OUTPUT_ROOT, "logs")
-    _ensure_dirs()
     return OUTPUT_ROOT
 
 
@@ -147,7 +172,15 @@ def resolve_output_root(cli_value: Optional[str] = None) -> Tuple[str, str]:
         if not os.path.exists(saved) or os.path.isdir(saved):
             return set_output_root(saved, "config"), "config"
 
-    return set_output_root(_DEFAULT_ROOT, "default"), "default"
+    root = _DEFAULT_ROOT
+    if not _root_writable(root):
+        # 受管机器上桌面可能不可写：退回当前工作目录，功能不能因此失效。
+        # 但要留痕——否则用户又该问"说好的桌面呢"。
+        global DEFAULT_ROOT_FELL_BACK
+        DEFAULT_ROOT_FELL_BACK = True
+        root = os.getcwd()
+        _root_writable(root)
+    return set_output_root(root, "default"), "default"
 
 
 def config_path(name: str) -> str:

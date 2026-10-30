@@ -67,6 +67,12 @@ EXIT_NEED_INPUT = 2
 EXIT_INPUT_ERROR = 3
 EXIT_ENGINE_ERROR = 4
 
+# ============================================================ 出图模式
+# 用户一开始就要在两者之间选一个，**没有默认值**：不给 --mode 就返回 need。
+MODE_ONE_SHOT = "one_shot"     # 一键式：方位按规则自动判定，不再询问
+MODE_CUSTOM = "custom"         # 自定义：主视图/上方向/外观件/导出目录逐项确认
+MODES = (MODE_ONE_SHOT, MODE_CUSTOM)
+
 # ============================================================ config 解析
 def load_job(config_path: str) -> dict:
     """从 job.json 加载配置，合并默认值，解析 step_file 路径。"""
@@ -331,28 +337,33 @@ def cmd_check(cfg: dict) -> dict:
     }
 
 
-def cmd_run(cfg: dict) -> dict:
-    """全流程：分析 → 出图 → DXF → 自检。"""
+def cmd_run(cfg: dict, analyzed: dict = None) -> dict:
+    """全流程：分析 → 出图 → DXF → 自检。
+
+    analyzed: 已经分析过的模型结果（一键式/自定义里都先分析过了），
+              传进来避免对同一个 STEP 重复跑一遍 BRepCheck（大装配体很贵）。
+    """
     name = cfg["_name"]
 
     # 1. analyze
-    r_analyze = cmd_analyze(cfg)
+    model = analyzed if analyzed is not None else cmd_analyze(cfg)["model"]
 
     # 如果多实体未筛选，返回 need（让 agent 问用户）
-    if r_analyze["model"]["solids"] > 1 and not cfg.get("solids_filtered"):
+    if model["solids"] > 1 and not cfg.get("solids_filtered"):
         return {
             "ok": False,
             "need": "solid_selection",
             "action": "run",
             "product": name,
-            "analyze": r_analyze["model"],
-            "message": f"模型含 {r_analyze['model']['solids']} 个实体（装配体）。"
+            "analyze": model,
+            "message": f"模型含 {model['solids']} 个实体（装配体）。"
                        f"外观专利通常只保留外观件，建议用 extract_solids.py 筛选后重试。"
                        f"如确认要全量出图，请在 config 中设置 \"solids_filtered\": true。",
             "options": [
                 {"label": "全量出图", "value": "all", "hint": "设置 solids_filtered=true 后重试"},
                 {"label": "筛选外观件", "value": "filter", "hint": "用 extract_solids.py keep <step> <ids> <out>"},
             ],
+            "forbidden": "禁止在用户答复前自行加 --solids-filtered。",
         }
 
     # 2. render
@@ -370,7 +381,7 @@ def cmd_run(cfg: dict) -> dict:
         "ok": r_check.get("ok"),
         "action": "run",
         "product": name,
-        "analyze": r_analyze["model"],
+        "analyze": model,
         "render": r_render.get("outputs"),
         "dxf": r_dxf.get("dxf_file"),
         "check": {
@@ -392,6 +403,48 @@ _PREVIEW_DIRS = [
     ("+Z", (0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
     ("-Z", (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
 ]
+
+# 轴值 ↔ 人话映射：用户在 HTML 上看到的是人话，不用理解 +X / -Y 这种坐标术语。
+# 主视图 6 个方向用"从哪个方向看产品"来描述：
+_AXIS_LABELS_CN = {
+    "+X": "右侧",    "-X": "左侧",
+    "+Y": "正面",    "-Y": "背面",
+    "+Z": "顶部",    "-Z": "底部",
+}
+# 上方向 4 个候选用"产品怎么摆"来描述：
+_UP_LABELS_CN = {
+    ("+Z", "+X"): "正着摆",   ("+Z", "-X"): "正着摆",
+    ("-Z", "+X"): "倒着摆",   ("-Z", "-X"): "倒着摆",
+    ("+Y", "+X"): "左倾",     ("+Y", "-X"): "左倾",
+    ("-Y", "+X"): "右倾",     ("-Y", "-X"): "右倾",
+    # front=±X 时 up 候选是 ±Y/±Z
+    ("+Z", "+Y"): "正着摆",   ("+Z", "-Y"): "正着摆",
+    ("-Z", "+Y"): "倒着摆",   ("-Z", "-Y"): "倒着摆",
+    ("+X", "+Y"): "右倾",     ("+X", "-Y"): "右倾",
+    ("-X", "+Y"): "左倾",     ("-X", "-Y"): "左倾",
+    # front=±Z 时 up 候选是 ±X/±Y
+    ("+Y", "+X"): "正着摆",   ("+Y", "-X"): "正着摆",
+    ("-Y", "+X"): "倒着摆",   ("-Y", "-X"): "倒着摆",
+    ("+X", "+Y"): "右倾",     ("-X", "+Y"): "左倾",
+}
+
+
+def _up_label_cn(front: str, up: str) -> str:
+    """给定主视图和上方向，返回人话描述（正着摆/倒着摆/左倾/右倾）。"""
+    # 简化逻辑：上方向的正半轴 = 正着/右倾，负半轴 = 倒着/左倾
+    # 具体取决于哪个轴
+    f = _axis_letter(front)
+    u = _axis_letter(up)
+    u_sign = "+" if up.strip().startswith("+") else "-"
+    if u == "Z":
+        return "正着摆" if u_sign == "+" else "倒着摆"
+    # up 在水平面内（X 或 Y），表示产品倾斜了
+    # 正半轴向右、负半轴向左（近似）
+    if f == "X" and u == "Y":
+        return "右倾" if u_sign == "+" else "左倾"
+    if f == "Y" and u == "X":
+        return "右倾" if u_sign == "+" else "左倾"
+    return "正着摆" if u_sign == "+" else "倒着摆"
 
 
 def build_cfg_from_step(step_path: str, product_name: str = None,
@@ -456,11 +509,15 @@ def perpendicular_axes(front: str) -> list:
 
 
 def make_orientation_previews(cfg: dict, kind: str = "front", front: str = None,
-                              target_px: int = 420) -> list:
+                              target_px: int = 420, errors: list = None) -> list:
     """渲染方位候选缩略图。
 
     kind="front" : 6 个候选主视图方向（±X/±Y/±Z）
     kind="up"    : 4 个候选上方向（垂直于给定 front）
+
+    errors: 传入一个 list 时，把每个方向的失败原因收集进去。**空列表是有意义的信号**
+            （渲染/落盘失败），调用方必须当错误处理——否则 agent 拿到
+            previews=[] 就没法问用户，只能自己猜，正是我们要堵的那条路。
     """
     import geom_core as geom
     from PIL import Image, ImageDraw
@@ -485,6 +542,8 @@ def make_orientation_previews(cfg: dict, kind: str = "front", front: str = None,
         try:
             _prims, polys = geom.project_visible_full(shape, d, u, deflection=0.2)
             if not polys:
+                if errors is not None:
+                    errors.append(f"{axis}: 该方向没有可见轮廓")
                 continue
             bb = geom.polyline_bbox(polys)
             w = max(bb[2] - bb[0], 1e-6)
@@ -508,18 +567,324 @@ def make_orientation_previews(cfg: dict, kind: str = "front", front: str = None,
             path = os.path.join(out_dir, f"{prefix}_{safe}.png")
             img.save(path, "PNG")
             results.append({"axis": axis, "file": path, "label": label, "size_px": target_px})
-        except Exception:
+        except Exception as e:
+            if errors is not None:
+                errors.append(f"{axis}: {type(e).__name__}: {e}")
             continue
     return results
 
 
-def cmd_auto(cfg: dict) -> dict:
-    """首次体验：一步到位出图，缺信息时返回 need 让 agent 问用户。"""
-    name = cfg["_name"]
+def _img_to_base64(path: str) -> str:
+    """读图片文件转 base64 data URI（内嵌进 HTML，双击即开不依赖外部文件）。"""
+    import base64
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("ascii")
+    return f"data:image/png;base64,{data}"
 
+
+def make_selection_html(cfg: dict, previews: list, kind: str,
+                        front: str = None, step_file: str = None) -> str:
+    """生成自包含的 HTML 选择页面（内嵌 base64 缩略图 + 人话标注 + 点击生成命令）。
+
+    用户双击打开这个 HTML 就能看到所有候选视角，点击选中的那张图，
+    页面底部自动显示出对应的命令，用户复制给 agent 即可。
+    全程不出现 +X / -Y 这种坐标术语。
+    """
+    out_dir = os.path.join(pl.DIR_OUTPUT, cfg["_name"], "orientation")
+    os.makedirs(out_dir, exist_ok=True)
+
+    if kind == "front":
+        page_name = "select_main_view.html"
+        title = "选主视图 —— 从哪个方向看过去是产品的「正面」？"
+        intro = ("主视图就是专利六视图里排第一张的那个面——"
+                 "产品正常摆放时，你站在正前方看到的那一面。"
+                 "点击下面最像「正面」的那张图。")
+        default_hint = "不确定就选「正面」，通常没错。"
+    else:
+        page_name = "select_up_axis.html"
+        title = f"产品怎么摆？ —— 主视图已选定，现在确认摆放方向"
+        intro = ("同一个正面，产品可以正着摆、倒着摆、左倾、右倾。"
+                 "选一个最自然的摆法——它决定俯视图和仰视图哪个在上。")
+        default_hint = "不确定就选「正着摆」，通常没错。"
+
+    # 构建 HTML 卡片
+    cards_html = []
+    for p in previews:
+        axis = p["axis"]
+        img_b64 = _img_to_base64(p["file"])
+        if kind == "front":
+            label_cn = _AXIS_LABELS_CN.get(axis, axis)
+            command = (f'patent-cli auto --step "{step_file}" '
+                       f'--mode custom --front {axis}')
+        else:
+            label_cn = _up_label_cn(front, axis)
+            command = (f'patent-cli auto --step "{step_file}" '
+                       f'--mode custom --front {front} --up {axis}')
+        # 转义命令里的引号给 JS 用
+        cmd_js = command.replace('"', '&quot;')
+        cards_html.append(f'''
+        <div class="card" onclick="selectCard(this, '{cmd_js}')">
+          <img src="{img_b64}" alt="{label_cn}" />
+          <div class="label">{label_cn}</div>
+        </div>''')
+
+    cards = "\n".join(cards_html)
+
+    html = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: -apple-system, "Microsoft YaHei", sans-serif;
+          background: #f5f5f5; color: #333; padding: 24px; }}
+  h1 {{ font-size: 20px; margin-bottom: 8px; }}
+  .intro {{ font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.6; }}
+  .grid {{ display: flex; flex-wrap: wrap; gap: 16px; }}
+  .card {{ background: #fff; border: 3px solid #ddd; border-radius: 8px;
+           padding: 8px; cursor: pointer; text-align: center;
+           transition: all 0.15s; width: 200px; }}
+  .card:hover {{ border-color: #4a90d9; transform: translateY(-2px); }}
+  .card.selected {{ border-color: #2ecc71; background: #eafaf1; }}
+  .card img {{ width: 180px; height: 180px; object-fit: contain; display: block;
+              margin: 0 auto 8px; }}
+  .card .label {{ font-size: 16px; font-weight: 600; }}
+  .hint {{ margin-top: 20px; font-size: 14px; color: #999; }}
+  .result {{ display: none; margin-top: 24px; padding: 16px 20px;
+            background: #fff; border: 2px solid #2ecc71; border-radius: 8px; }}
+  .result.show {{ display: block; }}
+  .result-label {{ font-size: 14px; color: #666; margin-bottom: 8px; }}
+  .result-cmd {{ font-family: "Cascadia Code", "Consolas", monospace; font-size: 14px;
+                background: #f0f0f0; padding: 12px; border-radius: 4px;
+                word-break: break-all; line-height: 1.5; }}
+  .copy-btn {{ margin-top: 8px; padding: 6px 16px; font-size: 14px;
+              background: #4a90d9; color: #fff; border: none; border-radius: 4px;
+              cursor: pointer; }}
+  .copy-btn:hover {{ background: #357abd; }}
+</style>
+</head>
+<body>
+  <h1>{title}</h1>
+  <p class="intro">{intro}</p>
+  <div class="grid">{cards}</div>
+  <p class="hint">{default_hint}</p>
+  <div class="result" id="result">
+    <div class="result-label">✅ 你选好了。把下面这行命令复制给你的 AI 助手：</div>
+    <div class="result-cmd" id="cmd"></div>
+    <button class="copy-btn" onclick="copyCmd()">复制命令</button>
+  </div>
+<script>
+  function selectCard(card, cmd) {{
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    var el = document.getElementById('cmd');
+    el.textContent = cmd;
+    document.getElementById('result').classList.add('show');
+  }}
+  function copyCmd() {{
+    var text = document.getElementById('cmd').textContent;
+    navigator.clipboard.writeText(text).then(function() {{
+      alert('已复制！粘贴给你的 AI 助手即可。');
+    }});
+  }}
+</script>
+</body>
+</html>"""
+
+    html_path = os.path.join(out_dir, page_name)
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    return html_path
+
+
+# ------------------------------------------------------------ 一键式方位规则
+
+def auto_axes_by_bbox(model: dict) -> tuple:
+    """一键式的方位规则：**写死在代码里，可复现、可解释**，不交给 agent 裁量。
+
+    规则：
+      · 上方向 = +Z（CAD 惯例：Z 轴朝上建模）
+      · 主视图 = 水平两轴（X / Y）中较长者的正方向；并列取 +X
+
+    已知局限（必须如实告知用户）：产品若不是 Z 轴朝上建模，或正面在 -X / -Y 一侧，
+    一键式会判偏。所以一键式的交付里必须写明"判了什么、依据是什么、怎么改"。
+    """
+    size = model.get("size_mm") or {}
+    dims = [float(size.get(k) or 0.0) for k in ("x", "y", "z")]
+    axes = ["X", "Y", "Z"]
+    front_i = max((0, 1), key=lambda i: (dims[i], -i))      # 并列时取 +X
+    front, up = f"+{axes[front_i]}", "+Z"
+    reason = (f"上方向取 +Z（CAD 惯例：Z 轴朝上建模）；"
+              f"主视图取水平两轴中较长者 = {front}"
+              f"（X={dims[0]:g}mm / Y={dims[1]:g}mm / Z={dims[2]:g}mm）")
+    return front, up, reason
+
+
+def need_mode_result(cfg: dict) -> dict:
+    """出图方式未定 → 必须问用户。没有默认值，也不允许 agent 代选。"""
+    return {
+        "ok": False,
+        "need": "mode",
+        "action": "auto",
+        "product": cfg.get("_name"),
+        "step_file": cfg.get("step_file"),
+        "message": (
+            "出图方式还没定，**必须先问用户**（这一步没有默认值，不能替他选）。\n"
+            "把下面两个选项原样给用户，拿到答复后再继续：\n"
+            "  A 一键式：不再打断。主视图/上方向按包围盒规则自动判定，图直接出到默认目录。"
+            "代价：主视图若与产品实际摆放不一致，附图会有形式缺陷，需要重出。\n"
+            "  B 自定义：多花 1–2 分钟。先给 6 张候选主视图让用户挑，再确认上方向、"
+            "外观件范围，以及这次图存到哪个文件夹。"
+        ),
+        "options": [
+            {"label": "A 一键式（自动判定方位，不再询问）", "value": MODE_ONE_SHOT,
+             "hint": "适合批量试样、内部预审；方位判错需重出"},
+            {"label": "B 自定义（逐项确认）", "value": MODE_CUSTOM,
+             "hint": "适合正式递交、不对称产品、多零件装配体"},
+        ],
+        "how_to_continue": (
+            "拿到用户答复后按他的选择调用（**不要自己选**）：\n"
+            f"  patent-cli auto --step <同一文件> --mode {MODE_ONE_SHOT}\n"
+            f"  patent-cli auto --step <同一文件> --mode {MODE_CUSTOM}"
+        ),
+        "forbidden": "禁止在用户没答复的情况下自行选择模式；也禁止跳过本步直接 run。",
+    }
+
+
+def need_out_dir_result(cfg: dict) -> dict:
+    """自定义模式下第一次出图 → 问一次导出目录（问过就记住，之后不再问）。"""
+    opts = []
+    desk = pl.desktop_dir()
+    if desk:
+        p = os.path.join(desk, pl.DESKTOP_FOLDER_NAME)
+        opts.append({"label": f"桌面「{pl.DESKTOP_FOLDER_NAME}」（推荐）", "value": p,
+                     "hint": "选它就固定存这里，以后不再问"})
+    opts.append({"label": "当前文件夹", "value": os.getcwd(),
+                 "hint": "图会落在当前工作目录下"})
+    opts.append({"label": "我来指定一个文件夹", "value": None,
+                 "hint": "让用户说路径，例如 D:\\专利出图"})
+    return {
+        "ok": False,
+        "need": "out_dir",
+        "action": "auto",
+        "stage": "out_dir",
+        "product": cfg.get("_name"),
+        "step_file": cfg.get("step_file"),
+        "message": (
+            "这是这台机器第一次出图，导出位置还没定过。"
+            "问用户图想存哪个文件夹——**只问这一次**，选定后会永久记住。"
+        ),
+        "options": opts,
+        "how_to_continue": (
+            "拿到用户答复后先把它记住（下次不再问）：\n"
+            "  patent-cli config --out-dir \"<选定路径>\"\n"
+            f"然后重跑：patent-cli auto --step <同一文件> --mode {MODE_CUSTOM}"
+        ),
+        "forbidden": "禁止在用户没答复时自行决定导出目录，也不要用 --out-dir 临时绕过。",
+    }
+
+
+def _preview_failed_result(cfg: dict, what: str, errors: list) -> dict:
+    """方位预览图一张都没渲染出来 → 明确报错。
+
+    以前这里是"静默返回空列表"，agent 拿到 previews=[] + options=[] 就问不了用户，
+    只能自己猜方位——正是本次事故的同类通道，所以必须当成硬错误。
+    """
+    return {
+        "ok": False,
+        "error": f"{what}预览图一张都没生成，无法让用户指认方位。",
+        "details": (errors or [])[:6],
+        "product": cfg.get("_name"),
+        "hint": ("常见原因：导出目录不可写（用 --out-dir 或 config --out-dir 指定可写目录），"
+                 "或模型几何异常（先跑 analyze 看 valid / solids）。"),
+        "forbidden": "禁止在拿不到预览图时自行推断方位——修好预览，或改用 --mode one_shot。",
+    }
+
+
+def cmd_auto(cfg: dict) -> dict:
+    """一步出图，但**出图方式与方位必须先由用户确认**。
+
+    两种模式（用户一开始就要选，没有默认值）：
+      one_shot 一键式 —— 方位按 auto_axes_by_bbox() 的规则判定，不再询问
+      custom   自定义 —— 导出目录（首次）→ 主视图 → 上方向 → 外观件，逐项确认
+    """
+    name = cfg["_name"]
+    mode = cfg.get("_mode")
+
+    # ---- 0. 出图方式未定 → 必须问用户（没有默认值）----
+    if not mode:
+        return need_mode_result(cfg)
+    if mode not in MODES:
+        return {"ok": False, "error": f"未知出图模式：{mode}",
+                "hint": f"--mode 只能是 {MODES[0]} 或 {MODES[1]}"}
+
+    # ======================================================== 一键式
+    if mode == MODE_ONE_SHOT:
+        # 一键式的语义是"方位由规则判定"，因此不接受调用方指定方位——
+        # 否则 agent 可以一边声称一键式、一边自己填 --front，等于绕开用户确认。
+        if cfg.get("_front_explicit") or cfg.get("_up_explicit"):
+            return {
+                "ok": False,
+                "input_error": True,
+                "error": "一键式（--mode one_shot）不接受 --front / --up：方位由规则自动判定。",
+                "hint": (f"想让用户自己定方位，请改用 --mode {MODE_CUSTOM} 逐项确认；"
+                         "否则去掉 --front / --up 重跑。"),
+            }
+
+        r_analyze = cmd_analyze(cfg)
+        model = r_analyze["model"]
+        front, up, reason = auto_axes_by_bbox(model)
+        cfg["front_axis"], cfg["up_axis"] = front, up
+        cfg["solids_filtered"] = True          # 一键式不做实体筛选（无法自动判断内部件）
+        cfg["_orientation_source"] = "auto_rule"
+        cfg["_orientation_user_confirmed"] = False
+        cfg["_orientation_rule"] = reason
+
+        warnings = []
+        if model["solids"] > 1:
+            warnings.append(
+                f"模型含 {model['solids']} 个实体，一键式按全量出图处理。"
+                f"若其中含 PCB/螺丝/支架等内部结构，附图会不合格——"
+                f"请改用 --mode {MODE_CUSTOM} 筛选外观件。"
+            )
+        if not model["valid"]:
+            warnings.append(
+                "模型 BRepCheck 判定无效"
+                + (f"（{len(model.get('invalid_solids') or [])} 个实体有问题）"
+                   if model.get("invalid_solids") else "")
+                + "。无效几何可能导致附图丢线，出图后请人工检查外轮廓是否闭合。"
+            )
+
+        r_run = cmd_run(cfg, analyzed=model)
+        r_run["mode"] = MODE_ONE_SHOT
+        if not r_run.get("ok"):
+            return r_run
+
+        r_run["orientation"] = {
+            "front_axis": front, "up_axis": up,
+            "source": "auto_rule", "rule": reason, "user_confirmed": False,
+        }
+        if warnings:
+            r_run.setdefault("warnings", []).extend(warnings)
+        r_run["must_tell_user"] = (
+            f"一键式：主视图按规则判定为 {front}、上方向 {up}（依据：{reason}）。"
+            f"若与产品实际摆放不一致，说一句就重出（约 40 秒）。"
+            + ("另：" + "；".join(warnings) if warnings else "")
+        )
+        return r_run
+
+    # ======================================================== 自定义
     # ---- 1. 主视图方向未确认 → 给 6 张缩略图让用户指认 ----
     if not cfg.get("_front_explicit"):
-        previews = make_orientation_previews(cfg, kind="front")
+        _errs = []
+        previews = make_orientation_previews(cfg, kind="front", errors=_errs)
+        if not previews:
+            return _preview_failed_result(cfg, "主视图", _errs)
+        # 生成自包含 HTML 选择页（内嵌图片 + 人话标注 + 点击生成命令）
+        selection_page = make_selection_html(
+            cfg, previews, kind="front", step_file=cfg["step_file"])
         return {
             "ok": False,
             "need": "orientation",
@@ -527,28 +892,38 @@ def cmd_auto(cfg: dict) -> dict:
             "action": "auto",
             "product": name,
             "step_file": cfg["step_file"],
+            "selection_page": selection_page,
+            "open_method": "agent_browser",
             "message": (
-                "模型的坐标轴和产品实际朝向不一定一致，出图前需要确认主视图方向。"
-                "请把下面 6 张图给用户看，问：「哪一张作为**主视图**"
-                "（即产品正常摆放时，从正面看过去的那一面）？」"
+                "已生成选择页面。**用你自己的内置浏览器打开它**（不要调系统外部浏览器）：\n"
+                f"  file:///{selection_page.replace(chr(92), '/')}\n"
+                "用户在页面里点其中一张图，底部会自动显示命令，复制给你即可。"
+                "也可以用户直接说「我选正面」之类的，你转成对应轴值。"
             ),
             "previews": previews,
             "options": [
-                {"label": f"主视图 = {p['axis']}", "value": p["axis"], "image": p["file"]}
+                {"label": _AXIS_LABELS_CN.get(p["axis"], p["axis"]),
+                 "value": p["axis"], "image": p["file"]}
                 for p in previews
             ],
             "how_to_continue": (
-                "用户选定主视图后，先用 --front 重新调用（暂不给 --up），"
-                "系统会接着询问上方向：\n"
-                "  patent-cli auto --step <同一文件> --front +Y"
+                "**拿到用户答复后**（点 HTML 或打字），用 --front 重新调用（暂不给 --up）：\n"
+                "  patent-cli auto --step <同一文件> --mode custom --front <用户选的轴>"
             ),
+            "forbidden": "禁止在用户答复前传 --front；禁止用对称性/包围盒推断代替询问。",
         }
 
     # ---- 2. 上方向未确认 → 给 4 张候选（决定俯视图/仰视图）----
     if not cfg.get("_up_explicit"):
         front = cfg["front_axis"]
         default_up = default_up_for(front)
-        previews = make_orientation_previews(cfg, kind="up", front=front)
+        _errs = []
+        previews = make_orientation_previews(cfg, kind="up", front=front, errors=_errs)
+        if not previews:
+            return _preview_failed_result(cfg, "上方向", _errs)
+        # 生成自包含 HTML 选择页（内嵌图片 + 人话标注 + 点击生成命令）
+        selection_page = make_selection_html(
+            cfg, previews, kind="up", front=front, step_file=cfg["step_file"])
         return {
             "ok": False,
             "need": "orientation",
@@ -558,29 +933,33 @@ def cmd_auto(cfg: dict) -> dict:
             "step_file": cfg["step_file"],
             "main_view": front,
             "default_up": default_up,
+            "selection_page": selection_page,
+            "open_method": "agent_browser",
             "message": (
-                f"主视图方向已定为 {front}。还需确认**上方向**——"
-                f"它决定俯视图和仰视图哪个在上、哪个在下，弄反会导致附图形式缺陷。\n"
-                f"请把下面 4 张图给用户看，问：「哪一张的朝向符合产品正常摆放时的"
-                f"**上方向**？」\n"
-                f"如果不想逐张看，直接用默认值 {default_up} 也可以。"
+                "已生成选择页面。**用你自己的内置浏览器打开它**（不要调系统外部浏览器）：\n"
+                f"  file:///{selection_page.replace(chr(92), '/')}\n"
+                "用户在页面里点其中一张图，底部会自动显示命令，复制给你即可。"
+                "也可以用户直接说「正着摆」之类的，你转成对应轴值。"
             ),
             "previews": previews,
             "options": [
-                {"label": f"上方向 = {p['axis']}", "value": p["axis"], "image": p["file"]}
+                {"label": _up_label_cn(front, p["axis"]),
+                 "value": p["axis"], "image": p["file"]}
                 for p in previews
             ],
             "how_to_continue": (
-                f"用户选定后（或接受默认 {default_up}），用 --front 和 --up 一起调用：\n"
-                f"  patent-cli auto --step <同一文件> --front {front} --up {default_up}"
+                f"**拿到用户答复后**（点 HTML 或打字），两个参数一起传：\n"
+                f"  patent-cli auto --step <同一文件> --mode custom "
+                f"--front {front} --up <用户选的轴>"
             ),
+            "forbidden": "禁止把 default_up 当作用户答复直接出图。",
         }
 
-    # ---- 3. 分析模型 ----
+    # ---- 4. 分析模型 ----
     r_analyze = cmd_analyze(cfg)
     model = r_analyze["model"]
 
-    # ---- 3. 多实体未筛选 → 让用户选外观件 ----
+    # ---- 4. 多实体未筛选 → 让用户选外观件 ----
     if model["solids"] > 1 and not cfg.get("solids_filtered"):
         return {
             "ok": False,
@@ -591,16 +970,18 @@ def cmd_auto(cfg: dict) -> dict:
             "message": (
                 f"模型含 {model['solids']} 个实体（装配体）。外观专利通常只保护外观件，"
                 f"内部结构（PCB/螺丝/支架）画进附图会导致不合格。"
+                f"**问用户**：全量出图，还是先筛选外观件？"
             ),
             "options": [
                 {"label": "全量出图", "value": "all",
-                 "hint": "在 config 加 \"solids_filtered\": true 后重试"},
+                 "hint": "用户确认后加 --solids-filtered 重跑"},
                 {"label": "筛选外观件", "value": "filter",
                  "hint": f"先跑 python scripts/extract_solids.py list {cfg['step_file']} 看实体清单"},
             ],
+            "forbidden": "禁止在用户答复前自行加 --solids-filtered。",
         }
 
-    # ---- 4. 模型无效 → 提前告知风险（不阻断，继续出图）----
+    # ---- 5. 模型无效 → 提前告知风险（不阻断，继续出图）----
     warnings = []
     if not model["valid"]:
         warnings.append(
@@ -610,8 +991,17 @@ def cmd_auto(cfg: dict) -> dict:
             + "。无效几何可能导致附图丢线，出图后请人工检查外轮廓是否闭合。"
         )
 
-    # ---- 5. 跑全流程 ----
-    r_run = cmd_run(cfg)
+    # ---- 6. 跑全流程 ----
+    # 方位/外观件都是用户确认过的，如实记进报告
+    cfg["_orientation_source"] = "user"
+    cfg["_orientation_user_confirmed"] = True
+    r_run = cmd_run(cfg, analyzed=model)
+    r_run["mode"] = MODE_CUSTOM
+    if r_run.get("ok"):
+        r_run["orientation"] = {
+            "front_axis": cfg["front_axis"], "up_axis": cfg["up_axis"],
+            "source": "user", "user_confirmed": True,
+        }
     if warnings:
         r_run.setdefault("warnings", []).extend(warnings)
     return r_run
@@ -650,10 +1040,10 @@ def main():
         prog="patent-cli",
         description="外观设计专利视图生成工具",
         epilog=(
-            "首次使用（最省事）：\n"
-            "  patent-cli auto --step model.step\n"
-            "  → 若返回 need=orientation，把 previews 给用户指认正面，\n"
-            "    再跑 patent-cli auto --step model.step --front +Y --up +Z\n"
+            "首次使用：**必须先让用户选出图方式**（没有默认值）\n"
+            "  patent-cli auto --step model.step                   → 返回 need=mode，问用户\n"
+            "  patent-cli auto --step model.step --mode one_shot    → 一键式：方位按规则自动判定\n"
+            "  patent-cli auto --step model.step --mode custom      → 自定义：逐项确认（含导出目录）\n"
             "\n"
             "换个导出位置（设置一次就记住）：\n"
             "  patent-cli config --out-dir \"D:/专利出图\"\n"
@@ -661,12 +1051,16 @@ def main():
     )
     parser.add_argument("command",
                         choices=["auto", "analyze", "render", "dxf", "check", "run", "config"],
-                        help="auto=首次体验(自动+引导) | analyze/render/dxf/check | run=全流程 | config=设置导出目录")
+                        help="auto=出图主入口(必须先选 --mode) | analyze/render/dxf/check | run=已确认方位后的全流程 | config=设置导出目录")
     parser.add_argument("--config", help="job.json 路径（与 --step 二选一）")
     parser.add_argument("--step", help="直接给 STEP 文件路径（自动生成配置，无需写 json）")
     parser.add_argument("--product-name", help="产品名（用于输出目录命名）")
     parser.add_argument("--front", help="正面方向：+X/-X/+Y/-Y/+Z/-Z")
     parser.add_argument("--up", help="上方方向：+X/-X/+Y/-Y/+Z/-Z")
+    parser.add_argument("--mode", choices=list(MODES),
+                        help="出图方式（auto 必填，**没有默认值**）："
+                             "one_shot=一键式（方位按包围盒规则自动判定，不再询问）| "
+                             "custom=自定义（导出目录/主视图/上方向/外观件逐项确认）")
     parser.add_argument("--out-dir",
                         help="导出根目录。普通命令里只对这次生效；"
                              "配 config 命令使用时会被记住，以后一直用它。")
@@ -686,15 +1080,6 @@ def main():
         result = cmd_config(args)
         _emit(result, args)
         raise SystemExit(EXIT_OK if result.get("ok") else EXIT_INPUT_ERROR)
-
-    # ---- 定输出根目录（--out-dir > PATENT_OUT_DIR > 记住的目录 > 默认） ----
-    try:
-        pl.resolve_output_root(args.out_dir)
-    except OSError as e:
-        _emit({"ok": False,
-               "error": f"输出目录不可用：{e}",
-               "hint": "换一个可写目录，或用 patent-cli config --out-dir <路径> 设置。"}, args)
-        raise SystemExit(EXIT_INPUT_ERROR)
 
     # ---- 加载配置：--config 或 --step 二选一 ----
     try:
@@ -729,6 +1114,44 @@ def main():
     # 命令行开关覆盖配置
     if args.solids_filtered:
         cfg["solids_filtered"] = True
+    cfg["_mode"] = args.mode
+
+    # ---- 闸门 1：出图方式未定 → 必须问用户 ----
+    # 刻意放在所有落盘动作之前：没定模式，磁盘上什么都不该出现。
+    if args.command == "auto" and not args.mode:
+        _emit(need_mode_result(cfg), args)
+        raise SystemExit(EXIT_NEED_INPUT)
+
+    # ---- 闸门 2：出图类命令不替用户猜方位 ----
+    # run / render / dxf / check 都是"方位已确认后的（分步）出图"入口；
+    # 没给方位就当成没确认，退回 auto 去问。analyze 不在此列（它只分析不出图）。
+    _ORIENTATION_REQUIRED = {"run", "render", "dxf", "check"}
+    if (args.command in _ORIENTATION_REQUIRED
+            and not (cfg.get("_front_explicit") and cfg.get("_up_explicit"))):
+        _emit({
+            "ok": False,
+            "need": "orientation",
+            "stage": "unconfirmed",
+            "action": args.command,
+            "product": cfg.get("_name"),
+            "message": (f"{args.command} 不会替用户猜方位。这个模型还没有确认过主视图/上方向，"
+                        "请先用 auto 走完确认流程。"),
+            "how_to_continue": (
+                "  patent-cli auto --step <同一文件> --mode custom   （逐项确认）\n"
+                "  patent-cli auto --step <同一文件> --mode one_shot （自动判定）"
+            ),
+            "forbidden": f"禁止在方位未确认时用 {args.command} 出图。",
+        }, args)
+        raise SystemExit(EXIT_NEED_INPUT)
+
+    # ---- 定输出根目录（--out-dir > PATENT_OUT_DIR > 记住的目录 > 默认） ----
+    try:
+        pl.resolve_output_root(args.out_dir)
+    except OSError as e:
+        _emit({"ok": False,
+               "error": f"输出目录不可用：{e}",
+               "hint": "换一个可写目录，或用 patent-cli config --out-dir <路径> 设置。"}, args)
+        raise SystemExit(EXIT_INPUT_ERROR)
 
     # ---- 分配输出目录 ----
     # 每个模型一个独立目录；同名但来自不同 STEP 时自动加 -2、-3 后缀，
@@ -764,8 +1187,22 @@ def main():
             sys.stdout = real_stdout
 
         if isinstance(result, dict):
-            result.setdefault("out_dir", pl.OUTPUT_ROOT)
-            result.setdefault("out_dir_source", pl.OUTPUT_ROOT_SOURCE)
+            # need=out_dir 时不能说"导出到 X"——那正是还没定的东西
+            if result.get("need") != "out_dir":
+                result.setdefault("out_dir", pl.OUTPUT_ROOT)
+                result.setdefault("out_dir_source", pl.OUTPUT_ROOT_SOURCE)
+                if (result.get("out_dir_source") == "default"
+                        and pl.DEFAULT_ROOT_FELL_BACK):
+                    result.setdefault(
+                        "note",
+                        "桌面「外观专利视图」不可写，本次退回当前工作目录导出；"
+                        "要用固定位置请 config --out-dir 指定。")
+            if cfg.get("_mode"):
+                result.setdefault("mode", cfg["_mode"])
+            if cfg.get("_orientation_source"):
+                result.setdefault("orientation_source", cfg["_orientation_source"])
+                result.setdefault("orientation_user_confirmed",
+                                  bool(cfg.get("_orientation_user_confirmed")))
             if cfg.get("_name"):
                 result.setdefault("product_dir",
                                   os.path.join(pl.DIR_OUTPUT, cfg["_name"]))
@@ -782,6 +1219,8 @@ def main():
         if not result.get("ok"):
             if result.get("need"):
                 raise SystemExit(EXIT_NEED_INPUT)
+            if result.get("input_error"):
+                raise SystemExit(EXIT_INPUT_ERROR)
             raise SystemExit(EXIT_ENGINE_ERROR)
         raise SystemExit(EXIT_OK)
 
@@ -860,6 +1299,9 @@ def cmd_config(args) -> dict:
         note = pl.default_root_note(path)
         if note:
             out["note"] = note
+        if pl.DEFAULT_ROOT_FELL_BACK:
+            out["note"] = ("桌面「外观专利视图」不可写，已退回当前工作目录；"
+                           "要用固定位置请 config --out-dir 指定。")
     return out
 
 

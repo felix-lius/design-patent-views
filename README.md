@@ -93,7 +93,8 @@
 可以在本地用命令行出图，再把结果贴给网页版 AI 讨论：
 
 ```bash
-patent-cli auto --step 你的模型.step --front +Y --up +Z
+patent-cli auto --step 你的模型.step --mode one_shot     # 一键式：方位自动判定
+patent-cli auto --step 你的模型.step --mode custom       # 自定义：逐项确认
 ```
 
 出图后打开**桌面「外观专利视图」文件夹**里 `output/<产品名>/submission/` 下的 7 张 JPEG，
@@ -167,21 +168,23 @@ patent-cli auto --step 你的模型.step --front +Y --up +Z
 >
 > 请在 CAD 中「另存为 / 导出」为 STEP（AP203 或 AP214）后使用。
 
-流程会自动走：
+流程会先让你选方式，再自动走：
 
 ```
-analyze  分析模型（实体数、尺寸、有效性）
+need=mode                           → 一键式（方位自动判定，不再问）/ 自定义（逐项确认）
    ↓
-need=orientation (stage=main_view)  → 6 张缩略图，问哪张作为主视图
-   ↓
-need=orientation (stage=up_axis)    → 4 张候选，问哪张是产品的上方
-   ↓
-need=solid_selection                → 多实体时问保留哪些外观件
+【一键式】按规则定方位 → 出图 + 导 DXF + 33 项合规自检
+【自定义】
+   need=out_dir          （仅第一次）→ 图存哪个文件夹，答一次永久记住
+   need=orientation (stage=main_view) → 6 张缩略图，问哪张作为主视图
+   need=orientation (stage=up_axis)   → 4 张候选，问哪张是产品的上方
+   need=solid_selection               → 多实体时问保留哪些外观件
    ↓
 出图 + 导 DXF + 33 项合规自检
 ```
 
-**最多问三个问题（主视图、上方向、外观件），10 秒出图。**
+**一键式不问方位；自定义逐项确认、一个都不能省。** 一键式出图后会告诉你
+"主视图判成了哪个轴、依据是什么"，判错了说一句就重出（约 40 秒）。
 
 > 为什么上方向也要确认：它决定俯视图和仰视图哪个在上、哪个在下，
 > 弄反会导致附图形式缺陷。
@@ -228,13 +231,18 @@ D:\专利出图\
 ## 直接命令行使用
 
 ```bash
-# 一步到位
-patent-cli auto --step model.step
+# 第一步：选方式（不给 --mode 会返回 need=mode，什么都不做）
+patent-cli auto --step model.step                        # → need: "mode"
 
-# 已确认方位
-patent-cli auto --step model.step --front +Y --up +Z
+# 一键式：方位按规则自动判定，不再询问
+patent-cli auto --step model.step --mode one_shot
 
-# 分步
+# 自定义：逐项确认（主视图 → 上方向 → 外观件 → 首次问导出目录）
+patent-cli auto --step model.step --mode custom
+patent-cli auto --step model.step --mode custom --front +Y
+patent-cli auto --step model.step --mode custom --front +Y --up +Z --solids-filtered
+
+# 分步（方位必须自己给，run 不会替你猜）
 patent-cli analyze --step model.step --quiet
 patent-cli render  --step model.step --front +Y --up +Z --quiet
 patent-cli dxf     --step model.step --front +Y --up +Z --quiet
@@ -242,11 +250,11 @@ patent-cli check   --step model.step --quiet
 
 # 导出目录：设置一次，以后都记住
 patent-cli config --out-dir "D:/专利出图"
-patent-cli config                      # 看当前导出到哪
+patent-cli config                      # 看当前导出到哪、来源是什么
 patent-cli config --reset              # 恢复默认
 
 # 只这一次换目录（不改记忆）
-patent-cli auto --step model.step --out-dir "D:/临时"
+patent-cli auto --step model.step --mode one_shot --out-dir "D:/临时"
 ```
 
 退出码：`0` 成功 / `2` 需要你输入 / `3` 输入错误 / `4` 引擎错误
